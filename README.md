@@ -2,6 +2,10 @@
 
 **Tattoo baker for FFXIV skin textures.** Place a transparent PNG on a 3D body and SeamInk writes it into the right spots of your skin texture, seamlessly across UV seams.
 
+### ⬇ [Download the latest version (zip)](https://github.com/manmarurere/SeamInk/releases/latest)
+
+All of the source code is in this repository (`seamink.html`, `seamink_server.py`, `Start_SeamInk.bat`), so you can read through it before downloading. See [How it works](#how-it-works) for exactly what the launcher reads.
+
 [日本語の説明はこちら](#日本語)
 
 Skin textures lay the body out in separate pieces (left and right, upper and lower body, and so on). A design that crosses a seam, such as one around the navel or down the middle of the back, normally has to be cut up and lined up piece by piece in an image editor. SeamInk works backwards from the 3D body instead, so the design stays continuous no matter how the texture is split.
@@ -58,6 +62,10 @@ It never writes to your Penumbra settings or mod folder, never sends anything of
 ## 日本語
 
 **FF14 の肌テクスチャ用タトゥー転写ツール**です。3D の体の上に透過 PNG を貼ると、UV の継ぎ目をまたいで肌テクスチャの正しい場所へ書き込みます。
+
+### ⬇ [最新版をダウンロード（zip）](https://github.com/manmarurere/SeamInk/releases/latest)
+
+ソースコードはすべてこのリポジトリにあります（`seamink.html`、`seamink_server.py`、`Start_SeamInk.bat`）。ダウンロードする前に中身を確認できます。
 
 肌テクスチャは、体が「左右」「上半身と下半身」などいくつかの部品に分かれて並んでいます。おへそ周りや背中の中心のように継ぎ目をまたぐ柄は、画像編集ソフトでは部品ごとに分けて描く必要がありました。SeamInk は 3D の体から逆算して書き込むので、テクスチャ上でどう分かれていても柄はつながったままになります。
 
