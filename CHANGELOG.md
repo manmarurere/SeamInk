@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.1
+
+- Fix: the built-in sample torso failed to load (on first start before choosing a race, when the page is opened without the launcher, and with "Back to sample"). Loading your own body and exporting were not affected.
+
 ## v1.0.0
 
 First public release.

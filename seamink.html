@@ -1456,14 +1456,14 @@ function buildSample() {
   }
   // sample tattoo: an ink sun emblem
   const T = 1024, tc = document.createElement('canvas'); tc.width = tc.height = T;
-  const t = tc.getContext('2d'); t.translate(T / 2, T / 2); t.fillStyle = t.strokeStyle = '#1d1717';
-  t.lineWidth = 22; t.beginPath(); t.arc(0, 0, 150, 0, Math.PI * 2); t.stroke();
-  t.lineWidth = 10; t.beginPath(); t.arc(0, 0, 105, 0, Math.PI * 2); t.stroke();
+  const tx = tc.getContext('2d'); tx.translate(T / 2, T / 2); tx.fillStyle = tx.strokeStyle = '#1d1717';
+  tx.lineWidth = 22; tx.beginPath(); tx.arc(0, 0, 150, 0, Math.PI * 2); tx.stroke();
+  tx.lineWidth = 10; tx.beginPath(); tx.arc(0, 0, 105, 0, Math.PI * 2); tx.stroke();
   for (let k = 0; k < 16; k++) {
     const a = (k / 16) * Math.PI * 2, long = k % 2 === 0, r0 = 185, r1 = long ? 470 : 330, hw = long ? 0.11 : 0.08;
-    t.beginPath(); t.moveTo(Math.cos(a - hw) * r0, Math.sin(a - hw) * r0); t.lineTo(Math.cos(a) * r1, Math.sin(a) * r1); t.lineTo(Math.cos(a + hw) * r0, Math.sin(a + hw) * r0); t.closePath(); t.fill();
+    tx.beginPath(); tx.moveTo(Math.cos(a - hw) * r0, Math.sin(a - hw) * r0); tx.lineTo(Math.cos(a) * r1, Math.sin(a) * r1); tx.lineTo(Math.cos(a + hw) * r0, Math.sin(a + hw) * r0); tx.closePath(); tx.fill();
   }
-  for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2 + Math.PI / 8; t.beginPath(); t.arc(Math.cos(a) * 60, Math.sin(a) * 60, 14, 0, Math.PI * 2); t.fill(); }
+  for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2 + Math.PI / 8; tx.beginPath(); tx.arc(Math.cos(a) * 60, Math.sin(a) * 60, 14, 0, Math.PI * 2); tx.fill(); }
   return { rec, skin: cv, tattoo: tc.toDataURL('image/png'), navel: { th: 0, h: 0.36, surf } };
 }
 
