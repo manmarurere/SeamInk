@@ -1,0 +1,1717 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SeamInk タトゥー転写</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: fixed control rail on the left (steps 1-4), full-bleed 3D viewport on the right with a floating UV inspector. */
+:root {
+  color-scheme: dark;
+  --bg: #141316;
+  --rail: #1c1a1f;
+  --raised: #252229;
+  --line: #36323b;
+  --fg: #ece5df;
+  --muted: #a19893;
+  --accent: #e2a47e;      /* skin-copper */
+  --accent-ink: #1b1412;
+  --ink: #6fb6c9;         /* tattoo-ink blue for selection */
+  --danger: #e0816f;
+  --ok: #8fc79a;
+  --font-ui: "Zen Kaku Gothic New", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+  --font-num: "IBM Plex Mono", "Consolas", ui-monospace, monospace;
+  --r: 6px;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 13px/1.55 var(--font-ui); overflow: hidden; }
+button, input, select { font: inherit; color: inherit; }
+.app { display: grid; grid-template-columns: 340px minmax(0, 1fr); height: 100%; }
+@media (max-width: 760px) { .app { grid-template-columns: 1fr; grid-template-rows: auto 60vh; overflow: auto; } body { overflow: auto; } }
+
+/* ---- rail ---- */
+.rail { background: var(--rail); border-right: 1px solid var(--line); overflow-y: auto; padding: 14px 16px 40px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.brand { display: flex; align-items: baseline; gap: 10px; }
+.brand h1 { font-size: 19px; margin: 0; letter-spacing: .02em; font-weight: 700; }
+.brand h1 span { color: var(--accent); }
+.brand small { color: var(--muted); font-size: 11.5px; }
+details.help { background: var(--raised); border-radius: var(--r); padding: 8px 12px; }
+details.help summary { cursor: pointer; color: var(--accent); font-weight: 500; }
+details.help ol { margin: 8px 0 4px; padding-left: 18px; display: grid; gap: 5px; color: var(--muted); }
+details.help b { color: var(--fg); font-weight: 500; }
+.rail > * { flex-shrink: 0; }
+html[lang="ja"] .help-body[lang="en"], html[lang="en"] .help-body[lang="ja"] { display: none; }
+.brand { flex-wrap: wrap; }
+.brand #lang { margin-left: auto; font-size: 12px; padding: 2px 4px; }
+details.help[open] { max-height: 70vh; overflow-y: auto; }
+details.help h3 { margin: 12px 0 4px; font-size: 12.5px; color: var(--fg); }
+details.help .hp { margin: 8px 0 0; color: var(--muted); }
+details.help ul { margin: 4px 0; padding-left: 18px; display: grid; gap: 4px; color: var(--muted); }
+.keys { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 10px; margin: 4px 0; font-size: 12px; }
+.keys dt { color: var(--fg); }
+.keys dd { margin: 0; color: var(--muted); }
+section.step { border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 9px; }
+section.step h2 { margin: 0; font-size: 13.5px; display: flex; align-items: center; gap: 8px; font-weight: 700; }
+section.step h2 .n { font-family: var(--font-num); font-size: 11px; color: var(--accent-ink); background: var(--accent); border-radius: 50%; width: 19px; height: 19px; display: inline-grid; place-items: center; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.row > label.grow, .grow { flex: 1; min-width: 0; }
+.muted { color: var(--muted); font-size: 12px; }
+.info { font-family: var(--font-num); font-size: 11.5px; color: var(--muted); word-break: break-all; }
+.btn { background: var(--raised); border: 1px solid var(--line); border-radius: var(--r); padding: 6px 11px; cursor: pointer; white-space: nowrap; }
+.btn:hover { border-color: var(--accent); }
+.btn:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.small { padding: 3px 8px; font-size: 12px; }
+.btn.danger:hover { border-color: var(--danger); color: var(--danger); }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+.btn.on { background: var(--ink); color: #0f1a1d; border-color: var(--ink); font-weight: 700; }
+.drop { border: 1px dashed var(--line); border-radius: var(--r); padding: 10px; text-align: center; color: var(--muted); cursor: pointer; transition: border-color .15s, background .15s; }
+.drop:hover, .drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--fg); }
+.drop b { color: var(--fg); font-weight: 500; }
+input[type=file] { display: none; }
+select, input[type=number], input[type=text] { background: var(--bg); border: 1px solid var(--line); border-radius: var(--r); padding: 4px 6px; }
+input[type=number] { width: 66px; font-family: var(--font-num); font-size: 12px; }
+input[type=range] { accent-color: var(--accent); width: 100%; }
+input[type=checkbox] { accent-color: var(--accent); }
+input[type=color] { width: 30px; height: 24px; border: 1px solid var(--line); border-radius: 4px; background: none; padding: 0; }
+.psrow { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 8px; align-items: center; font-size: 12.5px; }
+.psrow select { width: 100%; min-width: 0; }
+.autores { display: grid; gap: 4px; }
+.autores div { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 8px; font-size: 12px; }
+.autores b { font-weight: 500; color: var(--muted); }
+.autores span { overflow-wrap: anywhere; }
+.autores .bad { color: var(--danger); }
+.autores small { display: block; color: var(--muted); font-family: var(--font-num); font-size: 10.5px; }
+.meshlist { display: grid; gap: 3px; max-height: 120px; overflow-y: auto; }
+.meshlist label { display: flex; gap: 6px; align-items: center; font-size: 12px; min-width: 0; }
+.meshlist label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.layers { display: grid; gap: 4px; }
+.layer { display: grid; grid-template-columns: 38px minmax(0,1fr) auto; gap: 8px; align-items: center; padding: 4px 6px; border-radius: var(--r); border: 1px solid transparent; cursor: pointer; background: var(--bg); }
+.layer:hover { border-color: var(--line); }
+.layer.sel { border-color: var(--ink); background: color-mix(in srgb, var(--ink) 10%, var(--bg)); }
+.layer img { width: 38px; height: 38px; object-fit: contain; background: repeating-conic-gradient(#3a363f 0 25%, #2b282f 0 50%) 0 0 / 10px 10px; border-radius: 4px; }
+.layer .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.layer .nm small { display: block; color: var(--muted); font-family: var(--font-num); font-size: 10.5px; }
+.layer .acts { display: flex; gap: 2px; }
+.icon { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 3px 5px; border-radius: 4px; font-size: 13px; line-height: 1; }
+.icon:hover { color: var(--fg); background: var(--raised); }
+.props { display: grid; gap: 7px; background: var(--raised); border-radius: var(--r); padding: 10px; }
+.prop { display: grid; grid-template-columns: 84px minmax(0,1fr) 66px; gap: 8px; align-items: center; font-size: 12px; }
+.prop .u { font-family: var(--font-num); }
+.empty { color: var(--muted); font-size: 12px; padding: 8px; border: 1px dashed var(--line); border-radius: var(--r); text-align: center; }
+
+/* ---- viewport ---- */
+.view { position: relative; min-width: 0; min-height: 0; background: radial-gradient(120% 90% at 50% 35%, #2a272e 0%, #141316 70%); }
+#gl { display: block; width: 100%; height: 100%; touch-action: none; }
+.toolbar { position: absolute; top: 12px; left: 12px; right: 12px; display: flex; gap: 6px; flex-wrap: wrap; pointer-events: none; }
+.toolbar > * { pointer-events: auto; }
+.toolbar .sep { width: 1px; background: var(--line); margin: 2px 4px; }
+.hint { position: absolute; left: 12px; bottom: 10px; color: var(--muted); font-size: 11.5px; background: color-mix(in srgb, var(--bg) 75%, transparent); padding: 4px 8px; border-radius: var(--r); max-width: calc(100% - 24px); }
+.uvpanel { position: absolute; right: 12px; bottom: 12px; width: min(320px, 45%); background: var(--rail); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,.45); }
+.uvpanel.big { width: min(78vh, calc(100% - 24px)); }
+.uvpanel header { display: flex; align-items: center; gap: 8px; padding: 5px 8px; font-size: 12px; border-bottom: 1px solid var(--line); }
+.uvpanel header .grow { color: var(--muted); }
+.uvpanel .stack { position: relative; aspect-ratio: 1; background: #0e0d10; }
+.uvpanel canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: auto; }
+.toast { position: absolute; top: 56px; left: 50%; transform: translateX(-50%); background: var(--raised); border: 1px solid var(--line); padding: 7px 14px; border-radius: var(--r); font-size: 12.5px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 80%; text-align: center; }
+.toast.show { opacity: 1; }
+.toast.err { border-color: var(--danger); color: var(--danger); }
+.busy { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(10,9,12,.55); font-size: 14px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div class="app">
+  <aside class="rail">
+    <div class="brand"><h1>Seam<span>Ink</span></h1><small data-i18n="tagline">UVの継ぎ目をまたぐタトゥー転写</small>
+      <select id="lang" aria-label="Language / 言語"><option value="ja">日本語</option><option value="en">English</option></select></div>
+
+    <details class="help" id="help">
+      <summary data-i18n="helpTitle">使い方</summary>
+      <div class="help-body" lang="ja">
+        <p class="hp">3Dの体に貼ったタトゥーを、肌テクスチャの正しい場所へ自動で書き込みます。テクスチャ上で体がいくつかに分かれていても、継ぎ目をまたいでつながった柄になります。</p>
+
+        <h3>基本の流れ</h3>
+        <ol>
+          <li><b>体と肌を読み込む</b><br>
+            「Start_SeamInk.bat」から開いた場合：Penumbraで今使っている体のモデルと肌テクスチャが左上の欄から入ります。初回は<b>種族と性別</b>を選んで「読み込む」を押します（次回からは自動）。<br>
+            自分で選ぶ場合：「1 体のモデル」に上半身と下半身の .mdl を<b>一緒に</b>（Ctrl+クリックで2つ）、「2 肌テクスチャ」に .tex を入れます。.glb / .fbx / .obj / PNG も使えます。</li>
+          <li><b>タトゥー画像を追加</b><br>「3 タトゥー」に透過PNGを入れるか、3D画面にドロップします（ドロップした場所に貼られます）。何枚でも重ねられます。</li>
+          <li><b>位置と大きさを合わせる</b><br>体の上を左ドラッグで移動し、スライダーで大きさ・回転・濃さを調整します。</li>
+          <li><b>保存して差し替える</b><br>「合成テクスチャを .tex で保存」を押し、表示される<b>差し替え先</b>のファイルと置き換え（ファイル名も元と同じにします）、Penumbraでmodを一度無効→有効にします。<b>元のファイルは必ずバックアップ</b>してください。</li>
+        </ol>
+
+        <h3>マウスとキー</h3>
+        <dl class="keys">
+          <dt>体を左ドラッグ</dt><dd>選んでいるタトゥーを移動（配置モード中）</dd>
+          <dt>背景を左ドラッグ</dt><dd>視点を回す（Alt+ドラッグなら体の上でも）</dd>
+          <dt>右ドラッグ / ホイール</dt><dd>視点の平行移動 / ズーム</dd>
+          <dt>Shift+ホイール</dt><dd>タトゥーの大きさ</dd>
+          <dt>Ctrl+ホイール</dt><dd>タトゥーの回転</dd>
+          <dt>Q</dt><dd>配置モードのオン・オフ（オフにすると体の上でも視点を回せます）</dd>
+          <dt>Delete</dt><dd>選んでいるタトゥーを削除</dd>
+        </dl>
+
+        <h3>タトゥーの設定</h3>
+        <dl class="keys">
+          <dt>サイズ</dt><dd>体の高さに対する幅の割合（%）</dd>
+          <dt>濃さ</dt><dd>インクの不透明度</dd>
+          <dt>投影の厚み</dt><dd>どこまで奥の面に写すか。腕・股・背中側に柄がはみ出す時は小さくします</dd>
+          <dt>回り込み限界</dt><dd>体の側面にどこまで回り込ませるか（角度）。小さいほど正面だけに写ります</dd>
+          <dt>向きを固定</dt><dd>移動しても投影の向きを変えません。「視点方向から投影」を押すと、今見ている向きでまっすぐ貼れます</dd>
+          <dt>単色</dt><dd>画像を指定の色1色で塗ります（黒い線画の色替えに）</dd>
+          <dt>左右対称コピー</dt><dd>体の反対側に鏡写しで複製します</dd>
+          <dt>重ね方</dt><dd>「乗算」にすると肌の陰影や質感が透けて、なじみやすくなります</dd>
+        </dl>
+
+        <h3>その他</h3>
+        <ul>
+          <li>右下の「テクスチャ上の位置」で、柄がテクスチャのどこに書かれるかを確認できます（⤢で拡大）。</li>
+          <li>「配置を保存」で、タトゥーの画像と位置をファイルに残せます。「配置を開く」で続きから編集できます。</li>
+          <li>「タトゥーだけ（透過PNG）」は、画像編集ソフトで自分で重ねたい時に使います。</li>
+          <li>体の上で肌の柄がずれて見える時は「UVの上下を反転」を切り替えます。</li>
+        </ul>
+      </div>
+      <div class="help-body" lang="en">
+        <p class="hp">Place a tattoo on the 3D body and SeamInk writes it into the right spots of the skin texture. Even where the body is split into several pieces on the texture, the design stays continuous across the seams.</p>
+
+        <h3>Basic steps</h3>
+        <ol>
+          <li><b>Load the body and skin</b><br>
+            Opened from "Start_SeamInk.bat": the body model and skin texture you currently use in Penumbra are loaded from the panel at the top left. The first time, choose your <b>race and gender</b> and press "Load" (automatic after that).<br>
+            Choosing files yourself: drop the upper- and lower-body .mdl files <b>together</b> (Ctrl+click both) into "1 Body model", and the .tex into "2 Skin texture". .glb / .fbx / .obj / PNG also work.</li>
+          <li><b>Add a tattoo image</b><br>Add a transparent PNG in "3 Tattoos", or drop it onto the 3D view (it is placed where you drop it). Stack as many as you like.</li>
+          <li><b>Adjust position and size</b><br>Left-drag on the body to move it; use the sliders for size, rotation and opacity.</li>
+          <li><b>Save and replace</b><br>Press "Save texture as .tex", replace the file shown as <b>Replace</b> with it (keep the original file name), then disable and re-enable the mod in Penumbra. <b>Always back up the original file first.</b></li>
+        </ol>
+
+        <h3>Mouse and keys</h3>
+        <dl class="keys">
+          <dt>Left-drag on body</dt><dd>Move the selected tattoo (in Place mode)</dd>
+          <dt>Left-drag on background</dt><dd>Rotate the view (Alt+drag works on the body too)</dd>
+          <dt>Right-drag / wheel</dt><dd>Pan / zoom</dd>
+          <dt>Shift+wheel</dt><dd>Tattoo size</dd>
+          <dt>Ctrl+wheel</dt><dd>Tattoo rotation</dd>
+          <dt>Q</dt><dd>Toggle Place mode (when off, dragging the body rotates the view)</dd>
+          <dt>Delete</dt><dd>Delete the selected tattoo</dd>
+        </dl>
+
+        <h3>Tattoo settings</h3>
+        <dl class="keys">
+          <dt>Size</dt><dd>Width as a percentage of body height</dd>
+          <dt>Opacity</dt><dd>How strong the ink is</dd>
+          <dt>Depth</dt><dd>How far behind the surface it still prints. Lower it if the design spills onto arms, the crotch or the back</dd>
+          <dt>Wrap limit</dt><dd>How far it wraps around the sides (angle). Lower values keep it to the front</dd>
+          <dt>Lock direction</dt><dd>Keeps the projection direction while you move it. "Project from view" aims it straight from your current view</dd>
+          <dt>Solid color</dt><dd>Paints the image in one color (handy for recoloring black line art)</dd>
+          <dt>Mirror copy</dt><dd>Duplicates it, mirrored, on the other side of the body</dd>
+          <dt>Blend</dt><dd>"Multiply" lets the skin's shading show through so the ink looks natural</dd>
+        </dl>
+
+        <h3>More</h3>
+        <ul>
+          <li>"Texture layout" at the bottom right shows where the design lands on the texture (⤢ to enlarge).</li>
+          <li>"Save layout" stores the tattoo images and positions in a file; "Open layout" lets you continue later.</li>
+          <li>"Tattoo only (PNG)" is for layering it yourself in an image editor.</li>
+          <li>If the skin looks misaligned on the body, toggle "Flip UV vertically".</li>
+        </ul>
+      </div>
+    </details>
+
+    <section class="step" id="presetSec" hidden>
+      <h2 data-i18n="presetTitle">Penumbraのmodから選ぶ</h2>
+      <label class="psrow"><span data-i18n="upper">上半身</span> <select id="psTop"></select></label>
+      <label class="psrow"><span data-i18n="lower">下半身</span> <select id="psLegs"></select></label>
+      <label class="psrow"><span data-i18n="skin">肌</span> <select id="psSkin"></select></label>
+      <div class="info" id="psInfo"></div>
+      <div class="row"><button class="btn small" id="psActive" data-i18n="psActive">Penumbraで使用中の組み合わせに戻す</button></div>
+    </section>
+    <section class="step" id="autoSec" hidden>
+      <h2 data-i18n="autoTitle">Penumbraで使用中の体を読み込む</h2>
+      <label class="psrow"><span data-i18n="race">種族</span> <select id="auRace"></select></label>
+      <label class="psrow"><span data-i18n="gender">性別</span> <select id="auGender"><option value="f" data-i18n="female">女性</option><option value="m" data-i18n="male">男性</option></select></label>
+      <label class="psrow"><span data-i18n="collection">設定</span> <select id="auCol" data-i18n-title="collectionTitle" title="Penumbraのコレクション"></select></label>
+      <div class="row"><button class="btn primary" id="auLoad" data-i18n="load">読み込む</button><span class="muted" id="auStatus"></span></div>
+      <div class="autores" id="auResult"></div>
+    </section>
+    <p class="muted" id="presetHint" hidden style="margin:0" data-i18n="presetHint">「Start_SeamInk.bat」から開くと、Penumbraで使っている体と肌を読み込めます。</p>
+
+    <section class="step">
+      <h2><span class="n">1</span><span data-i18n="s1">体のモデル</span></h2>
+      <label class="drop" id="modelDrop" for="modelFile" data-i18n="modelDrop"><b>.mdl / .glb / .fbx / .obj</b> を選ぶかドロップ（複数可）</label>
+      <input type="file" id="modelFile" accept=".mdl,.glb,.gltf,.fbx,.obj" multiple>
+      <div class="info" id="modelInfo">—</div>
+      <div class="meshlist" id="meshList"></div>
+      <div class="row">
+        <label class="row"><input type="checkbox" id="uvFlip"> <span data-i18n="uvFlip">UVの上下を反転</span></label>
+        <label class="row grow" style="justify-content:flex-end">UV <select id="uvChan"></select></label>
+      </div>
+      <div class="row">
+        <button class="btn small" id="rotX" data-i18n="rotX">モデルをX軸で90°回す</button>
+        <button class="btn small" id="loadSample" data-i18n="loadSample">サンプルに戻す</button>
+      </div>
+    </section>
+
+    <section class="step">
+      <h2><span class="n">2</span><span data-i18n="s2">肌テクスチャ</span></h2>
+      <label class="drop" id="texDrop" for="texFile" data-i18n="texDrop"><b>.tex / PNG / JPG</b> を選ぶかドロップ</label>
+      <input type="file" id="texFile" accept=".tex,image/png,image/jpeg,image/webp,image/bmp">
+      <div class="info" id="texInfo">—</div>
+      <div class="row">
+        <button class="btn small" id="clearTex" data-i18n="clearTex">テクスチャを外す</button>
+        <label class="row"><span data-i18n="outSize">テクスチャ無しの時の出力</span> <select id="outSize"><option>1024</option><option selected>2048</option><option>4096</option></select></label>
+      </div>
+    </section>
+
+    <section class="step">
+      <h2><span class="n">3</span><span data-i18n="s3">タトゥー</span></h2>
+      <label class="drop" id="tatDrop" for="tatFile" data-i18n="tatDrop"><b>透過PNG</b> を追加（複数可）</label>
+      <input type="file" id="tatFile" accept="image/png,image/webp,image/jpeg" multiple>
+      <div class="layers" id="layerList"></div>
+      <div class="props" id="props" hidden>
+        <div class="prop"><span data-i18n="pSize">サイズ</span><input type="range" id="pSize" min="1" max="80" step="0.1"><span class="row"><input type="number" id="pSizeN" min="0.2" max="200" step="0.1"></span></div>
+        <div class="prop"><span data-i18n="pRot">回転</span><input type="range" id="pRot" min="-180" max="180" step="0.5"><input type="number" id="pRotN" min="-180" max="180" step="0.5"></div>
+        <div class="prop"><span data-i18n="pOp">濃さ</span><input type="range" id="pOp" min="0" max="100" step="1"><input type="number" id="pOpN" min="0" max="100" step="1"></div>
+        <div class="prop"><span data-i18n="pDepth">投影の厚み</span><input type="range" id="pDepth" min="5" max="200" step="1"><input type="number" id="pDepthN" min="1" max="400" step="1"></div>
+        <div class="prop"><span data-i18n="pCut">回り込み限界</span><input type="range" id="pCut" min="20" max="89" step="1"><input type="number" id="pCutN" min="5" max="89" step="1"></div>
+        <div class="row" style="gap:12px">
+          <label class="row"><input type="checkbox" id="pFlip"> <span data-i18n="pFlip">左右反転</span></label>
+          <label class="row"><input type="checkbox" id="pLock"> <span data-i18n="pLock">向きを固定</span></label>
+          <label class="row"><input type="checkbox" id="pTintOn"> <span data-i18n="pTint">単色</span> <input type="color" id="pTint" value="#1d1717"></label>
+        </div>
+        <div class="row">
+          <button class="btn small" id="pFromView" data-i18n="pFromView" data-i18n-title="pFromViewTitle" title="今の視点の方向からまっすぐ投影します">視点方向から投影</button>
+          <button class="btn small" id="pMirror" data-i18n="pMirror" data-i18n-title="pMirrorTitle" title="X=0 を境に反対側へコピーします">左右対称コピー</button>
+          <button class="btn small" id="pDup" data-i18n="pDup">複製</button>
+        </div>
+        <p class="muted" style="margin:0" data-i18n="propsNote">サイズは体の高さに対する%。厚みはサイズに対する%で、裏側や腕に柄が写り込む時は小さくします。</p>
+      </div>
+    </section>
+
+    <section class="step">
+      <h2><span class="n">4</span><span data-i18n="s4">書き出し</span></h2>
+      <div class="row">
+        <label class="row"><span data-i18n="blend">重ね方</span> <select id="blend"><option value="0" data-i18n="blendNormal">通常</option><option value="1" data-i18n="blendMul">乗算（肌の質感を残す）</option></select></label>
+      </div>
+      <div class="row">
+        <label class="row"><span data-i18n="pad">にじみ止め</span> <input type="number" id="pad" min="0" max="64" step="1" value="8"> px</label>
+      </div>
+      <div class="row">
+        <button class="btn primary" id="expTex" data-i18n="expTex" data-i18n-title="expTexTitle" title="無圧縮 B8G8R8A8・ミップマップ付き。そのままmodに入れられます">合成テクスチャを .tex で保存</button>
+        <button class="btn" id="expComp" data-i18n="expComp">合成テクスチャをPNGで保存</button>
+        <button class="btn" id="expTat" data-i18n="expTat">タトゥーだけ（透過PNG）</button>
+      </div>
+      <div class="info" id="expInfo"></div>
+      <div class="row" style="border-top:1px solid var(--line); padding-top:10px">
+        <span class="muted grow" data-i18n="projNote">配置を保存して後で編集</span>
+        <button class="btn small" id="projSave" data-i18n="projSave">配置を保存</button>
+        <label class="btn small" for="projFile" data-i18n="projOpen">配置を開く</label>
+        <input type="file" id="projFile" accept=".json,application/json">
+      </div>
+    </section>
+  </aside>
+
+  <main class="view" id="view">
+    <canvas id="gl"></canvas>
+    <div class="toolbar">
+      <button class="btn on" id="placeMode" data-i18n="placeMode" data-i18n-title="placeModeTitle" title="Q で切り替え">配置モード</button>
+      <span class="sep"></span>
+      <button class="btn small" data-view="front" data-i18n="vFront">正面</button>
+      <button class="btn small" data-view="back" data-i18n="vBack">背面</button>
+      <button class="btn small" data-view="left" data-i18n="vLeft">左側</button>
+      <button class="btn small" data-view="right" data-i18n="vRight">右側</button>
+      <span class="sep"></span>
+      <button class="btn small on" id="uvToggle" data-i18n="uvToggle">UV表示</button>
+    </div>
+    <div class="toast" id="toast"></div>
+    <div class="hint" id="hint" data-i18n="hint">体を左ドラッグ：タトゥーを移動　背景ドラッグ / Alt+ドラッグ：回転　右ドラッグ：平行移動　ホイール：ズーム　Shift+ホイール：サイズ　Ctrl+ホイール：回転</div>
+    <div class="uvpanel" id="uvPanel">
+      <header><span data-i18n="uvTitle">テクスチャ上の位置</span><span class="grow"></span>
+        <label class="row" style="font-size:11.5px"><input type="checkbox" id="uvWire" checked> <span data-i18n="uvWire">網目</span></label>
+        <button class="icon" id="uvBig" data-i18n-title="uvBig" title="拡大 / 縮小">⤢</button></header>
+      <div class="stack" id="uvStack"><canvas id="uvImg"></canvas><canvas id="uvWireC"></canvas></div>
+    </div>
+    <div class="busy" id="busy" hidden data-i18n="busy">処理中…</div>
+  </main>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+
+THREE.ColorManagement.enabled = false;
+const $ = (id) => document.getElementById(id);
+
+/* ============================== language ============================== */
+const I18N = {
+  ja: {
+    title: 'SeamInk タトゥー転写', tagline: 'UVの継ぎ目をまたぐタトゥー転写', helpTitle: '使い方',
+    presetTitle: 'Penumbraのmodから選ぶ', upper: '上半身', lower: '下半身', skin: '肌', psActive: 'Penumbraで使用中の組み合わせに戻す',
+    autoTitle: 'Penumbraで使用中の体を読み込む', race: '種族', gender: '性別', female: '女性', male: '男性', collection: '設定', collectionTitle: 'Penumbraのコレクション', load: '読み込む',
+    presetHint: '「Start_SeamInk.bat」から開くと、Penumbraで使っている体と肌を読み込めます。',
+    s1: '体のモデル', modelDrop: '<b>.mdl / .glb / .fbx / .obj</b> を選ぶかドロップ（複数可）', uvFlip: 'UVの上下を反転', rotX: 'モデルをX軸で90°回す', loadSample: 'サンプルに戻す',
+    s2: '肌テクスチャ', texDrop: '<b>.tex / PNG / JPG</b> を選ぶかドロップ', clearTex: 'テクスチャを外す', outSize: 'テクスチャ無しの時の出力',
+    s3: 'タトゥー', tatDrop: '<b>透過PNG</b> を追加（複数可）', pSize: 'サイズ', pRot: '回転', pOp: '濃さ', pDepth: '投影の厚み', pCut: '回り込み限界',
+    pFlip: '左右反転', pLock: '向きを固定', pTint: '単色', pFromView: '視点方向から投影', pFromViewTitle: '今の視点の方向からまっすぐ投影します',
+    pMirror: '左右対称コピー', pMirrorTitle: 'X=0 を境に反対側へコピーします', pDup: '複製',
+    propsNote: 'サイズは体の高さに対する%。厚みはサイズに対する%で、裏側や腕に柄が写り込む時は小さくします。',
+    s4: '書き出し', blend: '重ね方', blendNormal: '通常', blendMul: '乗算（肌の質感を残す）', pad: 'にじみ止め',
+    expTex: '合成テクスチャを .tex で保存', expTexTitle: '無圧縮 B8G8R8A8・ミップマップ付き。そのままmodに入れられます', expComp: '合成テクスチャをPNGで保存', expTat: 'タトゥーだけ（透過PNG）',
+    projNote: '配置を保存して後で編集', projSave: '配置を保存', projOpen: '配置を開く',
+    placeMode: '配置モード', placeModeTitle: 'Q で切り替え', vFront: '正面', vBack: '背面', vLeft: '左側', vRight: '右側', uvToggle: 'UV表示',
+    hint: '体を左ドラッグ：タトゥーを移動　背景ドラッグ / Alt+ドラッグ：回転　右ドラッグ：平行移動　ホイール：ズーム　Shift+ホイール：サイズ　Ctrl+ホイール：回転',
+    uvTitle: 'テクスチャ上の位置', uvWire: '網目', uvBig: '拡大 / 縮小', busy: '処理中…',
+    noUV: 'UVなし', uvOutside: '  ⚠ 0–1の外にUVがあります', modelInfo: 'メッシュ {a}/{b}・頂点 {v}・{range}', material: '材質: {m}',
+    errMdlVer: '{f}: 未対応の.mdlバージョン ({v})', errVtx: '{f}: 未対応の頂点形式 (type {t})', errFormat: '{f}: 対応していない形式です（.mdl / .glb / .gltf / .fbx / .obj）',
+    errNoMesh: 'メッシュが見つかりませんでした', and: ' と ', loaded: '{n} を読み込みました', errModel: 'モデルを読み込めませんでした: {e}',
+    errTexFmt: '{f}: 未対応の.tex形式 (0x{x})。PNGにして読み込んでください', errTexGpu: '{f}: このブラウザ/GPUは {l} を読めません。PNGにして読み込んでください',
+    errTexMax: 'このPCのGPUでは {m}px までです', noTex: 'なし（{s}×{s} で出力）', errImage: '画像を読み込めませんでした', needModel: '先に体のモデルを読み込んでください',
+    noLayers: 'まだタトゥーがありません', vis: '表示 / 非表示', up: '上の層へ', down: '下の層へ', del: '削除',
+    fromView: '今の視点からまっすぐ投影します（向きを固定）', copy: '{n} のコピー', mirror: '{n}（対称）',
+    noModel: 'モデルがありません', needBase: '合成には肌テクスチャが必要です。タトゥーだけの書き出しは使えます',
+    sec: '{t}秒', replaceBackup: '差し替え先（元のファイルはバックアップを）: {p}', saved: '{n} を保存しました', errExport: '書き出しに失敗しました: {e}',
+    errLayoutFile: 'SeamInk の配置ファイルではありません', layoutLoaded: '配置を読み込みました（{m} で作成）', noModelName: 'モデル名なし', errLayout: '配置を読み込めませんでした: {e}',
+    texSet: '{n} を肌テクスチャにしました', errTex: 'テクスチャを読み込めませんでした: {e}',
+    sFR: '前・右', sFL: '前・左', sBL: '後ろ・左', sBR: '後ろ・右', sampleBody: 'サンプル胴体', sampleModel: 'サンプル（4分割UVの胴体）', sampleTattoo: 'サンプル：太陽の紋',
+    errRead: '{f} を読めませんでした', disabled: '（Penumbraで無効）', using: '★使用中 ', replace: '差し替え先: {p}', presetLoaded: 'Penumbraのコレクション「{c}」で使用中の組み合わせを読み込みました',
+    errPenumbra: 'Penumbraの設定を読めませんでした', rUpper: '上半身', rLower: '下半身', rMaterial: '素材', rSkin: '肌', rReplace: '差し替え先', rError: 'エラー',
+    noMod: 'modが見つかりません', errNoBodyMod: '体のモデルを入れ替えるmodが見つかりません（バニラの体には対応していません）', errNoMatName: '体のメッシュに素材名がありません',
+    matNotFound: '{n} を入れ替えるmodが見つかりません', errNoMtrl: '肌の素材（.mtrl）がmodで見つかりません（バニラの肌には対応していません）',
+    texNotFound: '{p} を入れ替えるmodが見つかりません（バニラの肌には対応していません）', errNoTex: '肌テクスチャがmodで見つかりません',
+    loadedStatus: '読み込みました', autoLoaded: '{r}（{g}）の体と肌を読み込みました', inUse: '（使用中）', pickRace: '種族と性別を選んで「読み込む」を押してください',
+    err_no_config: 'Penumbraの設定フォルダが見つかりません（XIVLauncher\\pluginConfigs\\Penumbra）。', err_no_moddir: 'Penumbraのmodフォルダ（ModDirectory）が見つかりません。',
+    err_no_collections: 'Penumbraのコレクションが見つかりません。',
+    race_mid: 'ミッドランダー', race_high: 'ハイランダー', race_elezen: 'エレゼン', race_miqote: 'ミコッテ', race_roe: 'ルガディン', race_lala: 'ララフェル',
+    race_raen: 'アウラ・レン', race_xaela: 'アウラ・ゼラ', race_hroth: 'ロスガル', race_viera: 'ヴィエラ',
+  },
+  en: {
+    title: 'SeamInk Tattoo Baker', tagline: 'Tattoos across UV seams', helpTitle: 'How to use',
+    presetTitle: 'Choose from Penumbra mods', upper: 'Upper', lower: 'Lower', skin: 'Skin', psActive: 'Back to what Penumbra uses now',
+    autoTitle: 'Load the body you use in Penumbra', race: 'Race', gender: 'Gender', female: 'Female', male: 'Male', collection: 'Set', collectionTitle: 'Penumbra collection', load: 'Load',
+    presetHint: 'Open it from "Start_SeamInk.bat" to load the body and skin you use in Penumbra.',
+    s1: 'Body model', modelDrop: 'Choose or drop <b>.mdl / .glb / .fbx / .obj</b> (several at once)', uvFlip: 'Flip UV vertically', rotX: 'Rotate model 90° on X', loadSample: 'Back to sample',
+    s2: 'Skin texture', texDrop: 'Choose or drop <b>.tex / PNG / JPG</b>', clearTex: 'Remove texture', outSize: 'Output size without a texture',
+    s3: 'Tattoos', tatDrop: 'Add <b>transparent PNGs</b> (several at once)', pSize: 'Size', pRot: 'Rotation', pOp: 'Opacity', pDepth: 'Depth', pCut: 'Wrap limit',
+    pFlip: 'Mirror image', pLock: 'Lock direction', pTint: 'Solid color', pFromView: 'Project from view', pFromViewTitle: 'Project straight from the current view',
+    pMirror: 'Mirror copy', pMirrorTitle: 'Copy to the other side of X = 0', pDup: 'Duplicate',
+    propsNote: 'Size is a % of body height. Depth is a % of the size; lower it if the design shows up on the back or the arms.',
+    s4: 'Export', blend: 'Blend', blendNormal: 'Normal', blendMul: 'Multiply (keeps skin detail)', pad: 'Edge padding',
+    expTex: 'Save texture as .tex', expTexTitle: 'Uncompressed B8G8R8A8 with mipmaps, ready to drop into the mod', expComp: 'Save texture as PNG', expTat: 'Tattoo only (PNG)',
+    projNote: 'Save the layout to edit later', projSave: 'Save layout', projOpen: 'Open layout',
+    placeMode: 'Place mode', placeModeTitle: 'Toggle with Q', vFront: 'Front', vBack: 'Back', vLeft: 'Left', vRight: 'Right', uvToggle: 'UV view',
+    hint: 'Drag body: move tattoo · Drag background / Alt+drag: rotate · Right-drag: pan · Wheel: zoom · Shift+wheel: size · Ctrl+wheel: rotate',
+    uvTitle: 'Texture layout', uvWire: 'Wireframe', uvBig: 'Enlarge / shrink', busy: 'Working…',
+    noUV: 'no UV', uvOutside: '  ⚠ some UVs are outside 0–1', modelInfo: '{a}/{b} meshes · {v} vertices · {range}', material: 'Material: {m}',
+    errMdlVer: '{f}: unsupported .mdl version ({v})', errVtx: '{f}: unsupported vertex format (type {t})', errFormat: '{f}: unsupported format (.mdl / .glb / .gltf / .fbx / .obj)',
+    errNoMesh: 'No meshes found', and: ' and ', loaded: 'Loaded {n}', errModel: 'Could not load the model: {e}',
+    errTexFmt: '{f}: unsupported .tex format (0x{x}). Convert it to PNG first', errTexGpu: '{f}: this browser/GPU cannot read {l}. Convert it to PNG first',
+    errTexMax: 'This GPU supports up to {m}px', noTex: 'none (exports {s}×{s})', errImage: 'Could not read the image', needModel: 'Load a body model first',
+    noLayers: 'No tattoos yet', vis: 'Show / hide', up: 'Move up', down: 'Move down', del: 'Delete',
+    fromView: 'Projecting straight from this view (direction locked)', copy: '{n} copy', mirror: '{n} (mirror)',
+    noModel: 'No model loaded', needBase: 'A skin texture is needed for this. "Tattoo only" works without one',
+    sec: '{t}s', replaceBackup: 'Replace (back up the original first): {p}', saved: 'Saved {n}', errExport: 'Export failed: {e}',
+    errLayoutFile: 'This is not a SeamInk layout file', layoutLoaded: 'Layout loaded (made with {m})', noModelName: 'unknown model', errLayout: 'Could not open the layout: {e}',
+    texSet: 'Using {n} as the skin texture', errTex: 'Could not load the texture: {e}',
+    sFR: 'Front R', sFL: 'Front L', sBL: 'Back L', sBR: 'Back R', sampleBody: 'Sample torso', sampleModel: 'Sample (torso with 4-piece UVs)', sampleTattoo: 'Sample: sun emblem',
+    errRead: 'Could not read {f}', disabled: ' (disabled in Penumbra)', using: '★In use ', replace: 'Replace: {p}', presetLoaded: 'Loaded what the Penumbra collection "{c}" uses now',
+    errPenumbra: 'Could not read the Penumbra settings', rUpper: 'Upper', rLower: 'Lower', rMaterial: 'Material', rSkin: 'Skin', rReplace: 'Replace', rError: 'Error',
+    noMod: 'No mod found', errNoBodyMod: 'No mod replaces the body model (vanilla bodies are not supported)', errNoMatName: 'The body mesh has no material name',
+    matNotFound: 'No mod replaces {n}', errNoMtrl: 'No mod provides the skin material (.mtrl) (vanilla skin is not supported)',
+    texNotFound: 'No mod replaces {p} (vanilla skin is not supported)', errNoTex: 'No mod provides the skin texture',
+    loadedStatus: 'Loaded', autoLoaded: 'Loaded the body and skin for {r} ({g})', inUse: ' (in use)', pickRace: 'Choose your race and gender, then press "Load"',
+    err_no_config: 'Penumbra\'s settings folder was not found (XIVLauncher\\pluginConfigs\\Penumbra).', err_no_moddir: 'Penumbra\'s mod folder (ModDirectory) was not found.',
+    err_no_collections: 'No Penumbra collections were found.',
+    race_mid: 'Midlander', race_high: 'Highlander', race_elezen: 'Elezen', race_miqote: 'Miqo\'te', race_roe: 'Roegadyn', race_lala: 'Lalafell',
+    race_raen: 'Au Ra (Raen)', race_xaela: 'Au Ra (Xaela)', race_hroth: 'Hrothgar', race_viera: 'Viera',
+  },
+};
+const LS = { get: (k) => { try { return localStorage.getItem('seamink.' + k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem('seamink.' + k, v); } catch {} } };
+let lang = LS.get('lang') || ((navigator.language || '').toLowerCase().startsWith('ja') ? 'ja' : 'en');
+if (!I18N[lang]) lang = 'ja';
+/** translated text; {name} placeholders are filled from vars */
+const t = (key, vars = {}) => (I18N[lang][key] ?? I18N.ja[key] ?? key).replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '');
+const langHooks = [];   // re-render callbacks for text built at runtime
+function applyLang() {
+  document.documentElement.lang = lang; document.title = t('title'); $('lang').value = lang;
+  document.querySelectorAll('[data-i18n]').forEach((el) => { el.innerHTML = t(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-title]').forEach((el) => { el.title = t(el.dataset.i18nTitle); });
+  langHooks.forEach((f) => f());
+}
+$('lang').addEventListener('change', (e) => { lang = e.target.value; LS.set('lang', lang); applyLang(); });
+const V3 = THREE.Vector3;
+const PREVIEW_MAX = 2048;
+
+/* ============================== renderer / scene ============================== */
+const canvas = $('gl'), viewEl = $('view');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setClearColor(0x000000, 0);
+const MAX_TEX = renderer.capabilities.maxTextureSize;
+const MAX_ANISO = renderer.capabilities.getMaxAnisotropy();
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(32, 1, 0.01, 100);
+camera.position.set(0, 1.2, 3);
+
+const state = {
+  meshes: [],          // { name, geo, work, bake, raw: {chan: Float32Array}, P, N, enabled }
+  modelName: '', flipV: false, chan: 'uv', chans: [], height: 1, center: new V3(), uvShift: [0, 0],
+  base: null,          // { tex, w, h, name }
+  outSize: 2048,
+  layers: [], sel: null, nextId: 1,
+  placeMode: true, blend: 0, padding: 8,
+  skin: new THREE.Color('#e7bfa3'),
+};
+
+/* ============================== shaders ============================== */
+const FS_VERT = /* glsl */`varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
+const UV_VERT = /* glsl */`
+varying vec3 vPos; varying vec3 vNrm;
+void main(){ vPos = position; vNrm = normal; gl_Position = vec4(uv.x * 2.0 - 1.0, uv.y * 2.0 - 1.0, 0.0, 1.0); }`;
+const noDepth = { depthTest: false, depthWrite: false };
+
+// marks the whole target as "outside every UV island" (alpha = -1)
+const initMat = new THREE.ShaderMaterial({ vertexShader: FS_VERT, fragmentShader: `void main(){ gl_FragColor = vec4(0.0, 0.0, 0.0, -1.0); }`, blending: THREE.NoBlending, ...noDepth });
+// marks texels covered by the mesh as empty-but-inside (alpha = 0)
+const coverMat = new THREE.ShaderMaterial({ vertexShader: UV_VERT, fragmentShader: `void main(){ gl_FragColor = vec4(0.0); }`, side: THREE.DoubleSide, blending: THREE.NoBlending, ...noDepth });
+// projects one tattoo image from 3D space into UV space
+const decalMat = new THREE.ShaderMaterial({
+  uniforms: {
+    tDecal: { value: null }, uCenter: { value: new V3() }, uAx: { value: new V3() }, uAy: { value: new V3() }, uAz: { value: new V3() },
+    uSize: { value: new THREE.Vector2(1, 1) }, uDepth: { value: 1 }, uCosCut: { value: 0.2 }, uOpacity: { value: 1 },
+    uTint: { value: new THREE.Color() }, uTintOn: { value: 0 }, uFlipX: { value: 0 },
+  },
+  vertexShader: UV_VERT,
+  fragmentShader: /* glsl */`
+    uniform sampler2D tDecal; uniform vec3 uCenter, uAx, uAy, uAz; uniform vec2 uSize;
+    uniform float uDepth, uCosCut, uOpacity, uTintOn, uFlipX; uniform vec3 uTint;
+    varying vec3 vPos; varying vec3 vNrm;
+    void main(){
+      vec3 d = vPos - uCenter;
+      float s = dot(d, uAx) / uSize.x + 0.5;
+      float t = dot(d, uAy) / uSize.y + 0.5;
+      float z = dot(d, uAz);
+      vec4 c = texture2D(tDecal, vec2(mix(s, 1.0 - s, uFlipX), t));   // premultiplied
+      float inside = step(0.0, s) * step(s, 1.0) * step(0.0, t) * step(t, 1.0);
+      float facing = dot(normalize(vNrm), uAz);
+      float k = uOpacity * inside
+              * smoothstep(uCosCut, uCosCut + 0.12, facing)
+              * (1.0 - smoothstep(uDepth * 0.85, uDepth, abs(z)));
+      if (k * c.a <= 0.0) discard;
+      vec3 pm = mix(c.rgb, uTint * c.a, uTintOn);
+      gl_FragColor = vec4(pm * k, c.a * k);
+    }`,
+  // written without blending into a scratch target: faces stacked on the same UVs (RueXB has some)
+  // then overwrite each other instead of inking the same texel twice
+  side: THREE.DoubleSide, ...noDepth, blending: THREE.NoBlending,
+});
+const zeroMat = new THREE.ShaderMaterial({ vertexShader: FS_VERT, fragmentShader: `void main(){ gl_FragColor = vec4(0.0); }`, blending: THREE.NoBlending, ...noDepth });
+// lays one finished layer (premultiplied) over the accumulated result
+const overMat = new THREE.ShaderMaterial({
+  uniforms: { tSrc: { value: null } }, vertexShader: FS_VERT, ...noDepth,
+  fragmentShader: `uniform sampler2D tSrc; void main(){ gl_FragColor = texelFetch(tSrc, ivec2(gl_FragCoord.xy), 0); }`,
+  blending: THREE.CustomBlending, blendEquation: THREE.AddEquation,
+  blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
+  blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
+});
+// pushes island-edge colors outward by one texel per pass so seams never show a gap
+const dilateMat = new THREE.ShaderMaterial({
+  uniforms: { tSrc: { value: null } }, vertexShader: FS_VERT, blending: THREE.NoBlending, ...noDepth,
+  fragmentShader: /* glsl */`
+    uniform sampler2D tSrc;
+    void main(){
+      ivec2 p = ivec2(gl_FragCoord.xy);
+      vec4 c = texelFetch(tSrc, p, 0);
+      if (c.a >= 0.0) { gl_FragColor = c; return; }
+      ivec2 sz = textureSize(tSrc, 0);
+      vec4 sum = vec4(0.0); float n = 0.0;
+      for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+        if (i == 0 && j == 0) continue;
+        vec4 s = texelFetch(tSrc, clamp(p + ivec2(i, j), ivec2(0), sz - 1), 0);
+        if (s.a >= 0.0) { sum += s; n += 1.0; }
+      }
+      gl_FragColor = n > 0.0 ? sum / n : c;
+    }`,
+});
+const clampMat = new THREE.ShaderMaterial({
+  uniforms: { tSrc: { value: null } }, vertexShader: FS_VERT, blending: THREE.NoBlending, ...noDepth,
+  fragmentShader: `uniform sampler2D tSrc; void main(){ gl_FragColor = clamp(texelFetch(tSrc, ivec2(gl_FragCoord.xy), 0), 0.0, 1.0); }`,
+});
+// base texture + tattoo layer -> final pixels (export and UV preview)
+const compMat = new THREE.ShaderMaterial({
+  uniforms: { tTat: { value: null }, tBase: { value: null }, uHasBase: { value: 0 }, uMode: { value: 0 }, uTatOnly: { value: 0 }, uFetch: { value: 0 }, uSkin: { value: state.skin } },
+  vertexShader: FS_VERT, blending: THREE.NoBlending, ...noDepth,
+  fragmentShader: /* glsl */`
+    uniform sampler2D tTat, tBase; uniform float uHasBase, uMode, uTatOnly, uFetch; uniform vec3 uSkin;
+    varying vec2 vUv;
+    void main(){
+      ivec2 p = ivec2(gl_FragCoord.xy);
+      vec4 t = clamp(uFetch > 0.5 ? texelFetch(tTat, p, 0) : texture2D(tTat, vUv), 0.0, 1.0);
+      vec3 straight = t.a > 0.0 ? t.rgb / t.a : vec3(0.0);
+      if (uTatOnly > 0.5) { gl_FragColor = vec4(straight, t.a); return; }
+      vec4 b = uHasBase > 0.5 ? (uFetch > 0.5 ? texelFetch(tBase, p, 0) : texture2D(tBase, vUv)) : vec4(uSkin, 1.0);
+      vec3 rgb = uMode > 0.5 ? mix(b.rgb, b.rgb * straight, t.a) : t.rgb + b.rgb * (1.0 - t.a);
+      gl_FragColor = vec4(rgb, b.a);
+    }`,
+});
+// 3D preview of the body
+const previewMat = new THREE.ShaderMaterial({
+  uniforms: { tBase: { value: null }, tTat: { value: null }, uHasBase: { value: 0 }, uHasTat: { value: 0 }, uMode: { value: 0 }, uSkin: { value: state.skin }, uCam: { value: new V3() } },
+  vertexShader: /* glsl */`
+    varying vec2 vUv; varying vec3 vN; varying vec3 vW;
+    void main(){ vUv = uv; vN = normal; vW = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: /* glsl */`
+    uniform sampler2D tBase, tTat; uniform float uHasBase, uHasTat, uMode; uniform vec3 uSkin, uCam;
+    varying vec2 vUv; varying vec3 vN; varying vec3 vW;
+    void main(){
+      vec4 b = uHasBase > 0.5 ? texture2D(tBase, vUv) : vec4(uSkin, 1.0);
+      vec4 t = uHasTat > 0.5 ? texture2D(tTat, vUv) : vec4(0.0);
+      vec3 straight = t.a > 0.001 ? t.rgb / t.a : vec3(0.0);
+      vec3 col = uMode > 0.5 ? mix(b.rgb, b.rgb * straight, t.a) : t.rgb + b.rgb * (1.0 - t.a);
+      vec3 n = normalize(vN); vec3 v = normalize(uCam - vW);
+      if (dot(n, v) < 0.0) n = -n;
+      vec3 l = normalize(v + vec3(0.25, 0.45, 0.0));
+      float light = 0.36 + 0.64 * max(dot(n, l), 0.0);
+      float rim = pow(1.0 - max(dot(n, v), 0.0), 3.0) * 0.10;
+      gl_FragColor = vec4(col * light + rim, 1.0);
+    }`,
+  side: THREE.DoubleSide,
+});
+
+/* ============================== offscreen passes ============================== */
+const fsCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+const fsScene = new THREE.Scene();
+const fsQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), initMat); fsQuad.frustumCulled = false; fsScene.add(fsQuad);
+const bakeScene = new THREE.Scene();
+function fsPass(mat, target) { fsQuad.material = mat; renderer.setRenderTarget(target); renderer.render(fsScene, fsCam); }
+const halfRT = (w, h) => new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: false, generateMipmaps: false });
+const byteRT = (w, h, mips) => {
+  const rt = new THREE.WebGLRenderTarget(w, h, { type: THREE.UnsignedByteType, depthBuffer: false, generateMipmaps: !!mips,
+    minFilter: mips ? THREE.LinearMipmapLinearFilter : THREE.LinearFilter, magFilter: THREE.LinearFilter });
+  rt.texture.anisotropy = mips ? MAX_ANISO : 1;
+  return rt;
+};
+
+function layerFrame(L) {
+  const z = L.nrm.clone().normalize();
+  const up = Math.abs(z.y) > 0.95 ? new V3(0, 0, -1) : new V3(0, 1, 0);
+  const x = new V3().crossVectors(up, z).normalize();
+  const y = new V3().crossVectors(z, x);
+  const a = THREE.MathUtils.degToRad(L.rot), c = Math.cos(a), s = Math.sin(a);
+  const xr = x.clone().multiplyScalar(c).addScaledVector(y, s);
+  const yr = x.clone().multiplyScalar(-s).addScaledVector(y, c);
+  return { x: xr, y: yr, z, w: L.width, h: L.width * L.aspect, depth: L.width * L.depthRatio };
+}
+
+/** Renders every visible layer into UV space. Returns the half-float target holding the result. */
+function bakeInto(A, B, padding) {
+  const prevAuto = renderer.autoClear; renderer.autoClear = false;
+  fsPass(initMat, A);
+  renderer.setRenderTarget(A);
+  bakeScene.overrideMaterial = coverMat; renderer.render(bakeScene, fsCam);
+  const u = decalMat.uniforms;
+  for (const L of state.layers) {
+    if (!L.visible || !L.pos) continue;
+    const f = layerFrame(L);
+    u.tDecal.value = L.tex; u.uCenter.value.copy(L.pos); u.uAx.value.copy(f.x); u.uAy.value.copy(f.y); u.uAz.value.copy(f.z);
+    u.uSize.value.set(f.w, f.h); u.uDepth.value = f.depth; u.uCosCut.value = Math.cos(THREE.MathUtils.degToRad(L.cut));
+    u.uOpacity.value = L.opacity; u.uTint.value.set(L.tint); u.uTintOn.value = L.tintOn ? 1 : 0; u.uFlipX.value = L.flipX ? 1 : 0;
+    decalMat.uniformsNeedUpdate = true;
+    // B is free until the dilation passes, so it serves as this layer's scratch target
+    fsPass(zeroMat, B);
+    renderer.setRenderTarget(B); bakeScene.overrideMaterial = decalMat; renderer.render(bakeScene, fsCam);
+    bakeScene.overrideMaterial = null;
+    overMat.uniforms.tSrc.value = B.texture; fsPass(overMat, A);
+  }
+  bakeScene.overrideMaterial = null;
+  let src = A, dst = B;
+  for (let i = 0; i < padding; i++) { dilateMat.uniforms.tSrc.value = src.texture; fsPass(dilateMat, dst); [src, dst] = [dst, src]; }
+  renderer.setRenderTarget(null); renderer.autoClear = prevAuto;
+  return src;
+}
+
+function exportSize() { return state.base ? [state.base.w, state.base.h] : [state.outSize, state.outSize]; }
+function previewSize() {
+  const [w, h] = exportSize(); const s = Math.min(1, PREVIEW_MAX / Math.max(w, h));
+  return [Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s))];
+}
+
+const pv = { A: null, B: null, disp: null, w: 0, h: 0 };
+function ensurePreviewTargets() {
+  const [w, h] = previewSize();
+  if (pv.A && pv.w === w && pv.h === h) return;
+  for (const k of ['A', 'B', 'disp']) pv[k]?.dispose();
+  pv.A = halfRT(w, h); pv.B = halfRT(w, h); pv.disp = byteRT(w, h, true); pv.w = w; pv.h = h;
+  previewMat.uniforms.tTat.value = pv.disp.texture;
+}
+
+let bakeDirty = true, uvDirty = true, renderDirty = true;
+const requestBake = () => { bakeDirty = true; };
+function bakePreview() {
+  ensurePreviewTargets();
+  const res = bakeInto(pv.A, pv.B, Math.min(state.padding, 4));
+  clampMat.uniforms.tSrc.value = res.texture; fsPass(clampMat, pv.disp); renderer.setRenderTarget(null);
+  previewMat.uniforms.uHasTat.value = 1;
+  uvDirty = true; renderDirty = true;
+}
+
+/* ============================== UV inspector ============================== */
+const uvImg = $('uvImg'), uvWireC = $('uvWireC');
+let uvRT = null, uvPix = null, wireKey = '';
+function drawUV() {
+  if ($('uvPanel').hidden) return;
+  const [w, h] = previewSize(); const s = Math.min(1, 1024 / Math.max(w, h));
+  const W = Math.round(w * s), H = Math.round(h * s);
+  if (!uvRT || uvRT.width !== W || uvRT.height !== H) { uvRT?.dispose(); uvRT = byteRT(W, H, false); uvPix = new Uint8Array(W * H * 4); }
+  $('uvStack').style.aspectRatio = `${W} / ${H}`;
+  const cu = compMat.uniforms;
+  cu.tTat.value = pv.disp.texture; cu.tBase.value = state.base?.tex || null; cu.uHasBase.value = state.base ? 1 : 0;
+  cu.uMode.value = state.blend; cu.uTatOnly.value = 0; cu.uFetch.value = 0;
+  fsPass(compMat, uvRT);
+  renderer.readRenderTargetPixels(uvRT, 0, 0, W, H, uvPix);
+  renderer.setRenderTarget(null);
+  uvImg.width = W; uvImg.height = H;
+  uvImg.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(uvPix.buffer), W, H), 0, 0);
+  const key = `${W}x${H}:${geoVersion}:${$('uvWire').checked}`;
+  if (key !== wireKey) { wireKey = key; drawWire(W, H); }
+}
+let geoVersion = 0;
+function drawWire(W, H) {
+  uvWireC.width = W; uvWireC.height = H;
+  const ctx = uvWireC.getContext('2d'); ctx.clearRect(0, 0, W, H);
+  if (!$('uvWire').checked) return;
+  ctx.strokeStyle = 'rgba(111,182,201,0.32)'; ctx.lineWidth = 0.6;
+  for (const m of state.meshes) {
+    if (!m.enabled) continue;
+    const uv = m.geo.attributes.uv.array, idx = m.geo.index ? m.geo.index.array : null;
+    const triCount = idx ? idx.length / 3 : uv.length / 6;
+    let path = new Path2D(), n = 0;
+    for (let t = 0; t < triCount; t++) {
+      const a = idx ? idx[t * 3] : t * 3, b = idx ? idx[t * 3 + 1] : t * 3 + 1, c = idx ? idx[t * 3 + 2] : t * 3 + 2;
+      path.moveTo(uv[a * 2] * W, uv[a * 2 + 1] * H); path.lineTo(uv[b * 2] * W, uv[b * 2 + 1] * H);
+      path.lineTo(uv[c * 2] * W, uv[c * 2 + 1] * H); path.closePath();
+      if (++n === 20000) { ctx.stroke(path); path = new Path2D(); n = 0; }
+    }
+    ctx.stroke(path);
+  }
+}
+$('uvWire').addEventListener('change', () => { uvDirty = true; });
+$('uvBig').addEventListener('click', () => { $('uvPanel').classList.toggle('big'); });
+$('uvToggle').addEventListener('click', (e) => { const p = $('uvPanel'); p.hidden = !p.hidden; e.currentTarget.classList.toggle('on', !p.hidden); uvDirty = true; });
+
+/* ============================== model ============================== */
+const modelGroup = new THREE.Group(); scene.add(modelGroup);
+const gizmo = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)),
+  new THREE.LineBasicMaterial({ color: 0x6fb6c9, transparent: true, opacity: 0.85, depthTest: false }));
+gizmo.matrixAutoUpdate = false; gizmo.renderOrder = 10; gizmo.visible = false; scene.add(gizmo);
+
+function clearModel() {
+  for (const m of state.meshes) { modelGroup.remove(m.work); bakeScene.remove(m.bake); m.geo.dispose(); }
+  state.meshes = [];
+}
+
+function extractMesh(mesh) {
+  const g = mesh.geometry, pos = g.attributes.position, nrm = g.attributes.normal, n = pos.count;
+  const P = new Float32Array(n * 3), N = new Float32Array(n * 3);
+  const mw = mesh.matrixWorld, nm = new THREE.Matrix3().getNormalMatrix(mw);
+  const skinned = mesh.isSkinnedMesh && mesh.skeleton && typeof mesh.applyBoneTransform === 'function';
+  if (!g.boundingSphere) g.computeBoundingSphere();
+  const eps = Math.max(g.boundingSphere.radius, 1e-6) * 1e-3;
+  const v = new V3(), a = new V3();
+  for (let i = 0; i < n; i++) {
+    v.fromBufferAttribute(pos, i);
+    if (nrm) a.fromBufferAttribute(nrm, i);
+    if (skinned) {
+      if (nrm) { a.multiplyScalar(eps).add(v); mesh.applyBoneTransform(i, a); a.applyMatrix4(mw); }
+      mesh.applyBoneTransform(i, v);
+    }
+    v.applyMatrix4(mw);
+    P[i * 3] = v.x; P[i * 3 + 1] = v.y; P[i * 3 + 2] = v.z;
+    if (nrm) {
+      if (skinned) a.sub(v); else a.applyMatrix3(nm);
+      a.normalize(); N[i * 3] = a.x; N[i * 3 + 1] = a.y; N[i * 3 + 2] = a.z;
+    }
+  }
+  const raw = {};
+  for (const k of ['uv', 'uv1', 'uv2', 'uv3']) if (g.attributes[k]) {
+    const at = g.attributes[k], arr = new Float32Array(n * 2);
+    for (let i = 0; i < n; i++) { arr[i * 2] = at.getX(i); arr[i * 2 + 1] = at.getY(i); }
+    raw[k] = arr;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(P, 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(N, 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n * 2), 2));
+  if (g.index) geo.setIndex(new THREE.BufferAttribute(new Uint32Array(g.index.array), 1));
+  if (!nrm) geo.computeVertexNormals();
+  const matName = Array.isArray(mesh.material) ? mesh.material.map((m) => m?.name).filter(Boolean).join(', ') : mesh.material?.name;
+  return { name: mesh.name || matName || 'mesh', matName: matName || '', geo, raw, P, N: geo.attributes.normal.array, enabled: true };
+}
+
+function addMeshRecords(recs, name, flipV) {
+  clearModel();
+  state.modelName = name; state.modelNameKey = null; state.flipV = flipV;
+  for (const r of recs) {
+    r.work = new THREE.Mesh(r.geo, previewMat);
+    r.bake = new THREE.Mesh(r.geo, coverMat); r.bake.frustumCulled = false;
+    r.work.visible = r.bake.visible = r.enabled;
+    modelGroup.add(r.work); bakeScene.add(r.bake);
+  }
+  state.meshes = recs;
+  const chans = ['uv', 'uv1', 'uv2', 'uv3'].filter((k) => recs.some((r) => r.raw[k]));
+  state.chans = chans; state.chan = chans[0] || 'uv';
+  $('uvChan').innerHTML = chans.map((c, i) => `<option value="${c}">${i}</option>`).join('');
+  $('uvFlip').checked = flipV;
+  renderMeshList();
+  applyUV();
+  frameModel('front');
+}
+
+function applyUV() {
+  // image-space UV: u to the right, v downward (row 0 = top of the PNG)
+  let minU = Infinity, minV = Infinity, maxU = -Infinity, maxV = -Infinity;
+  for (const m of state.meshes) {
+    const raw = m.raw[state.chan], out = m.geo.attributes.uv.array;
+    m.hasUV = !!raw;
+    if (!raw) { out.fill(-1); continue; }
+    for (let i = 0; i < raw.length; i += 2) {
+      const u = raw[i], v = state.flipV ? 1 - raw[i + 1] : raw[i + 1];
+      out[i] = u; out[i + 1] = v;
+      if (m.enabled) { minU = Math.min(minU, u); maxU = Math.max(maxU, u); minV = Math.min(minV, v); maxV = Math.max(maxV, v); }
+    }
+  }
+  // whole layout sits in another 0-1 tile (e.g. 1..2): move it home
+  const su = isFinite(minU) && maxU - Math.floor(minU + 1e-6) <= 1 + 1e-4 ? Math.floor(minU + 1e-6) : 0;
+  const sv = isFinite(minV) && maxV - Math.floor(minV + 1e-6) <= 1 + 1e-4 ? Math.floor(minV + 1e-6) : 0;
+  state.uvShift = [su, sv];
+  for (const m of state.meshes) {
+    const out = m.geo.attributes.uv.array;
+    if (m.hasUV && (su || sv)) for (let i = 0; i < out.length; i += 2) { out[i] -= su; out[i + 1] -= sv; }
+    m.geo.attributes.uv.needsUpdate = true;
+  }
+  geoVersion++; updateModelInfo(minU - su, maxU - su, minV - sv, maxV - sv);
+  requestBake();
+}
+
+let lastUVRange = [Infinity, -Infinity, Infinity, -Infinity];
+function updateModelInfo(u0, u1, v0, v1) {
+  if (u0 === undefined) [u0, u1, v0, v1] = lastUVRange; else lastUVRange = [u0, u1, v0, v1];
+  if (!state.meshes.length) return;
+  const verts = state.meshes.reduce((s, m) => s + (m.enabled ? m.geo.attributes.position.count : 0), 0);
+  const range = isFinite(u0) ? `U ${u0.toFixed(2)}–${u1.toFixed(2)} / V ${v0.toFixed(2)}–${v1.toFixed(2)}` : t('noUV');
+  const warn = isFinite(u0) && (u0 < -0.01 || u1 > 1.01 || v0 < -0.01 || v1 > 1.01) ? t('uvOutside') : '';
+  const name = state.modelNameKey ? t(state.modelNameKey) : state.modelName;
+  $('modelInfo').textContent = `${name}\n${t('modelInfo', { a: state.meshes.filter((m) => m.enabled).length, b: state.meshes.length, v: verts.toLocaleString(), range })}${warn}`;
+  $('modelInfo').style.whiteSpace = 'pre-line';
+}
+langHooks.push(() => updateModelInfo());
+
+function renderMeshList() {
+  const el = $('meshList');
+  el.innerHTML = '';
+  if (state.meshes.length < 2) return;
+  state.meshes.forEach((m, i) => {
+    const lab = document.createElement('label');
+    lab.title = m.matName ? t('material', { m: m.matName }) : m.name;
+    lab.innerHTML = `<input type="checkbox" id="mesh${i}" ${m.enabled ? 'checked' : ''}><span>${escapeHTML(m.name)}${m.matName && m.matName !== m.name ? ` <span class="muted">(${escapeHTML(m.matName)})</span>` : ''}</span>`;
+    lab.querySelector('input').addEventListener('change', (e) => { m.enabled = e.target.checked; m.work.visible = m.bake.visible = m.enabled; applyUV(); });
+    el.appendChild(lab);
+  });
+}
+
+function modelBox() {
+  const box = new THREE.Box3();
+  for (const m of state.meshes) if (m.enabled) { m.geo.computeBoundingBox(); box.union(m.geo.boundingBox); }
+  return box;
+}
+function frameModel(dir) {
+  const box = modelBox(); if (box.isEmpty()) return;
+  const size = box.getSize(new V3()), c = box.getCenter(new V3());
+  state.height = Math.max(size.y, 1e-4); state.center.copy(c);
+  const radius = size.length() / 2;
+  const dist = radius / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2)) * 1.15;
+  const d = { front: [0, 0, 1], back: [0, 0, -1], left: [1, 0, 0], right: [-1, 0, 0] }[dir] || [0, 0, 1];
+  camera.near = radius / 500; camera.far = radius * 50; camera.updateProjectionMatrix();
+  controls.target.copy(c);
+  camera.position.copy(c).add(new V3(...d).multiplyScalar(dist)).add(new V3(0, radius * 0.05, 0));
+  controls.update(); renderDirty = true;
+}
+document.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => frameModel(b.dataset.view)));
+
+$('uvFlip').addEventListener('change', (e) => { state.flipV = e.target.checked; applyUV(); });
+$('uvChan').addEventListener('change', (e) => { state.chan = e.target.value; applyUV(); });
+$('rotX').addEventListener('click', () => {
+  const m4 = new THREE.Matrix4().makeRotationX(-Math.PI / 2);
+  for (const m of state.meshes) { m.geo.applyMatrix4(m4); m.P = m.geo.attributes.position.array; m.N = m.geo.attributes.normal.array; }
+  for (const L of state.layers) if (L.pos) { L.pos.applyMatrix4(m4); L.nrm.transformDirection(m4); }
+  frameModel('front'); requestBake(); updateGizmo();
+});
+
+/* ---- FF14 .mdl (v5 / v6), LOD 0 only: positions, normals and UVs; bones are not needed ---- */
+function halfToFloat(h) {
+  const s = h & 0x8000 ? -1 : 1, e = (h >> 10) & 0x1f, f = h & 0x3ff;
+  if (e === 0) return s * f * 2 ** -24;
+  if (e === 31) return f ? NaN : s * Infinity;
+  return s * (1 + f / 1024) * 2 ** (e - 15);
+}
+function parseMdl(buf, fileName) {
+  const dv = new DataView(buf), u8 = new Uint8Array(buf);
+  const ver = dv.getUint32(0, true) & 0xffff;
+  if (ver !== 5 && ver !== 6) throw new Error(t('errMdlVer', { f: fileName, v: ver }));
+  const nDecl = dv.getUint16(12, true);
+  const vOff = dv.getUint32(16, true), iOff = dv.getUint32(28, true);
+  let p = 68;
+  const decls = [];
+  for (let i = 0; i < nDecl; i++, p += 136) {
+    const els = [];
+    for (let k = 0; k < 17; k++) {
+      const q = p + k * 8; if (u8[q] === 0xff) break;
+      els.push({ stream: u8[q], offset: u8[q + 1], type: u8[q + 2], usage: u8[q + 3], index: u8[q + 4] });
+    }
+    decls.push(els);
+  }
+  p += 4; const strSize = dv.getUint32(p, true); p += 4;
+  const strings = u8.subarray(p, p + strSize); p += strSize;
+  const h = p;
+  const meshCount = dv.getUint16(h + 4, true), attrCount = dv.getUint16(h + 6, true), subCount = dv.getUint16(h + 8, true), matCount = dv.getUint16(h + 10, true);
+  const eidCount = dv.getUint16(h + 24, true), tsmCount = u8[h + 26], flags2 = u8[h + 27], tsSubCount = dv.getUint16(h + 38, true);
+  p += 56 + eidCount * 32;
+  const lod0Mesh = dv.getUint16(p, true), lod0Count = dv.getUint16(p + 2, true);
+  p += 3 * 60; if (flags2 & 0x10) p += 3 * 40;
+  const meshes = [];
+  for (let i = 0; i < meshCount; i++, p += 36) meshes.push({
+    vc: dv.getUint16(p, true), ic: dv.getUint32(p + 4, true), mat: dv.getUint16(p + 8, true), start: dv.getUint32(p + 16, true),
+    vbo: [dv.getUint32(p + 20, true), dv.getUint32(p + 24, true), dv.getUint32(p + 28, true)], stride: [u8[p + 32], u8[p + 33], u8[p + 34]],
+  });
+  p += attrCount * 4 + tsmCount * 20 + subCount * 16 + tsSubCount * 10;
+  const cstr = (o) => { let e = o; while (e < strings.length && strings[e]) e++; return new TextDecoder().decode(strings.subarray(o, e)); };
+  const mats = []; for (let i = 0; i < matCount; i++, p += 4) mats.push(cstr(dv.getUint32(p, true)));
+
+  const read = (el, m, vi, out) => {
+    const o = vOff + m.vbo[el.stream] + vi * m.stride[el.stream] + el.offset;
+    switch (el.type) {
+      case 0: case 1: case 2: case 3: { const n = el.type + 1; for (let k = 0; k < 4; k++) out[k] = k < n ? dv.getFloat32(o + k * 4, true) : 0; return; }
+      case 13: case 14: { const n = el.type === 13 ? 2 : 4; for (let k = 0; k < 4; k++) out[k] = k < n ? halfToFloat(dv.getUint16(o + k * 2, true)) : 0; return; }
+      case 8: for (let k = 0; k < 4; k++) out[k] = u8[o + k] / 255; return;
+      case 9: case 10: { const n = el.type === 9 ? 2 : 4; for (let k = 0; k < 4; k++) out[k] = k < n ? Math.max(dv.getInt16(o + k * 2, true) / 32767, -1) : 0; return; }
+      default: throw new Error(t('errVtx', { f: fileName, t: el.type }));
+    }
+  };
+  const recs = [], tmp = [0, 0, 0, 0];
+  for (let mi = lod0Mesh; mi < lod0Mesh + lod0Count; mi++) {
+    const m = meshes[mi], d = decls[mi] || decls[0], n = m.vc;
+    const ePos = d.find((e) => e.usage === 0), eNrm = d.find((e) => e.usage === 3);
+    const eUV = d.filter((e) => e.usage === 4).sort((a, b) => a.index - b.index);
+    if (!ePos || !n) continue;
+    const P = new Float32Array(n * 3), N = new Float32Array(n * 3);
+    const raw = {}; const chans = ['uv', 'uv1', 'uv2', 'uv3'];
+    // UV0 holds two UV sets when it has 4 components (xy = uv, zw = uv1)
+    const uvSlots = [];
+    eUV.forEach((e) => { uvSlots.push([e, 0]); if (e.type === 3 || e.type === 14) uvSlots.push([e, 2]); });
+    uvSlots.slice(0, 4).forEach((_, i) => { raw[chans[i]] = new Float32Array(n * 2); });
+    for (let v = 0; v < n; v++) {
+      read(ePos, m, v, tmp); P[v * 3] = tmp[0]; P[v * 3 + 1] = tmp[1]; P[v * 3 + 2] = tmp[2];
+      if (eNrm) { read(eNrm, m, v, tmp); const l = Math.hypot(tmp[0], tmp[1], tmp[2]) || 1; N[v * 3] = tmp[0] / l; N[v * 3 + 1] = tmp[1] / l; N[v * 3 + 2] = tmp[2] / l; }
+      uvSlots.slice(0, 4).forEach(([e, c], i) => { read(e, m, v, tmp); raw[chans[i]][v * 2] = tmp[c]; raw[chans[i]][v * 2 + 1] = tmp[c + 1]; });
+    }
+    const idx = new Uint32Array(m.ic);
+    for (let k = 0; k < m.ic; k++) idx[k] = dv.getUint16(iOff + (m.start + k) * 2, true);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(P, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(N, 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n * 2), 2));
+    geo.setIndex(new THREE.BufferAttribute(idx, 1));
+    if (!eNrm) geo.computeVertexNormals();
+    const matName = (mats[m.mat] || '').replace(/^\//, '');
+    recs.push({ name: `${fileName.replace(/\.mdl$/i, '')} #${mi}`, matName, geo, raw, P, N: geo.attributes.normal.array, enabled: true });
+  }
+  return recs;
+}
+
+async function loadObjectFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  const buf = await file.arrayBuffer();
+  if (ext === 'mdl') return { recs: parseMdl(buf, file.name), flip: false };
+  let root, flip;
+  if (ext === 'glb' || ext === 'gltf') {
+    const data = ext === 'gltf' ? new TextDecoder().decode(buf) : buf;
+    const gltf = await new Promise((res, rej) => new GLTFLoader().parse(data, '', res, rej));
+    root = gltf.scene; flip = false;
+  } else if (ext === 'fbx') { root = new FBXLoader().parse(buf, ''); flip = true; }
+  else if (ext === 'obj') { root = new OBJLoader().parse(new TextDecoder().decode(buf)); flip = true; }
+  else throw new Error(t('errFormat', { f: file.name }));
+  root.updateMatrixWorld(true);
+  const recs = [];
+  root.traverse((o) => { if (o.isMesh && o.geometry?.attributes?.position) recs.push(extractMesh(o)); });
+  return { recs, flip };
+}
+
+/** Loads one or more model files together (e.g. RueXB top + legs) and replaces the current model. */
+async function loadModelFiles(files) {
+  files = [...files].filter((f) => isModel(f.name)); if (!files.length) return;
+  setBusy(true);
+  try {
+    let recs = [], flip = null;
+    for (const f of files) { const r = await loadObjectFile(f); recs = recs.concat(r.recs); if (flip === null) flip = r.flip; }
+    if (!recs.length) throw new Error(t('errNoMesh'));
+    // keep only the skin: the material used by the most vertices (other meshes can be ticked back on)
+    const byMat = new Map();
+    for (const r of recs) byMat.set(r.matName, (byMat.get(r.matName) || 0) + r.geo.attributes.position.count);
+    if (byMat.size > 1) {
+      const top = [...byMat].sort((a, b) => b[1] - a[1])[0][0];
+      for (const r of recs) r.enabled = r.matName === top;
+    }
+    addMeshRecords(recs, files.map((f) => f.name).join(' + '), flip);
+    toast(t('loaded', { n: files.map((f) => f.name).join(t('and')) }));
+  } catch (err) { console.error(err); toast(t('errModel', { e: err.message || err }), true); }
+  finally { setBusy(false); }
+}
+
+/* ============================== base texture ============================== */
+/* ---- FF14 .tex ---- */
+const TEX_FORMATS = {
+  0x1450: 'B8G8R8A8', 0x1451: 'B8G8R8X8', 0x3420: 'BC1', 0x3430: 'BC2', 0x3431: 'BC3', 0x6432: 'BC7',
+};
+const copyMat = new THREE.ShaderMaterial({
+  uniforms: { tSrc: { value: null } }, vertexShader: FS_VERT, blending: THREE.NoBlending, ...noDepth,
+  fragmentShader: `uniform sampler2D tSrc; void main(){ gl_FragColor = texelFetch(tSrc, ivec2(gl_FragCoord.xy), 0); }`,
+});
+/** Decodes mip 0 of a .tex into straight RGBA8 (row 0 = top). Block-compressed formats are decoded by the GPU. */
+function decodeTex(buf, name) {
+  const dv = new DataView(buf);
+  const attr = dv.getUint32(0, true), fmt = dv.getUint32(4, true), w = dv.getUint16(8, true), h = dv.getUint16(10, true);
+  const off = dv.getUint32(28, true) || 80;
+  const label = TEX_FORMATS[fmt];
+  if (!label) throw new Error(t('errTexFmt', { f: name, x: fmt.toString(16) }));
+  const rgba = new Uint8Array(w * h * 4);
+  if (fmt === 0x1450 || fmt === 0x1451) {
+    const src = new Uint8Array(buf, off, w * h * 4);
+    for (let i = 0; i < src.length; i += 4) { rgba[i] = src[i + 2]; rgba[i + 1] = src[i + 1]; rgba[i + 2] = src[i]; rgba[i + 3] = fmt === 0x1451 ? 255 : src[i + 3]; }
+    return { rgba, w, h, attr, fmt, label };
+  }
+  const bc = { 0x3420: [THREE.RGBA_S3TC_DXT1_Format, 8, 'WEBGL_compressed_texture_s3tc'], 0x3430: [THREE.RGBA_S3TC_DXT3_Format, 16, 'WEBGL_compressed_texture_s3tc'],
+    0x3431: [THREE.RGBA_S3TC_DXT5_Format, 16, 'WEBGL_compressed_texture_s3tc'], 0x6432: [THREE.RGBA_BPTC_Format, 16, 'EXT_texture_compression_bptc'] }[fmt];
+  if (!renderer.extensions.has(bc[2])) throw new Error(t('errTexGpu', { f: name, l: label }));
+  const size = Math.ceil(w / 4) * Math.ceil(h / 4) * bc[1];
+  const ct = new THREE.CompressedTexture([{ data: new Uint8Array(buf, off, size), width: w, height: h }], w, h, bc[0]);
+  ct.colorSpace = THREE.NoColorSpace; ct.minFilter = ct.magFilter = THREE.NearestFilter; ct.generateMipmaps = false; ct.needsUpdate = true;
+  const rt = byteRT(w, h, false);
+  copyMat.uniforms.tSrc.value = ct; fsPass(copyMat, rt);
+  renderer.readRenderTargetPixels(rt, 0, 0, w, h, rgba);
+  renderer.setRenderTarget(null); rt.dispose(); ct.dispose();
+  return { rgba, w, h, attr, fmt, label };
+}
+/** Uncompressed B8G8R8A8 .tex with a full mip chain (the same layout the RueXB mod ships for Mid_Detailed.tex). */
+function encodeTex(w, h, rgba, attr = 0x00800000) {
+  const levels = [{ w, h, d: rgba }];
+  while (levels.length < 13) {
+    const a = levels[levels.length - 1]; if (a.w === 1 && a.h === 1) break;
+    const nw = Math.max(1, a.w >> 1), nh = Math.max(1, a.h >> 1), d = new Uint8Array(nw * nh * 4);
+    for (let y = 0; y < nh; y++) for (let x = 0; x < nw; x++) for (let c = 0; c < 4; c++) {
+      const x0 = Math.min(x * 2, a.w - 1), x1 = Math.min(x * 2 + 1, a.w - 1), y0 = Math.min(y * 2, a.h - 1), y1 = Math.min(y * 2 + 1, a.h - 1);
+      d[(y * nw + x) * 4 + c] = (a.d[(y0 * a.w + x0) * 4 + c] + a.d[(y0 * a.w + x1) * 4 + c] + a.d[(y1 * a.w + x0) * 4 + c] + a.d[(y1 * a.w + x1) * 4 + c] + 2) >> 2;
+    }
+    levels.push({ w: nw, h: nh, d });
+  }
+  const total = 80 + levels.reduce((s, l) => s + l.d.length, 0);
+  const out = new Uint8Array(total), dv = new DataView(out.buffer);
+  dv.setUint32(0, attr, true); dv.setUint32(4, 0x1450, true); dv.setUint16(8, w, true); dv.setUint16(10, h, true);
+  dv.setUint16(12, 1, true); out[14] = levels.length; out[15] = 0;
+  dv.setUint32(16, 0, true); dv.setUint32(20, Math.min(1, levels.length - 1), true); dv.setUint32(24, Math.min(2, levels.length - 1), true);
+  let o = 80;
+  levels.forEach((l, i) => {
+    dv.setUint32(28 + i * 4, o, true);
+    for (let k = 0; k < l.d.length; k += 4) { out[o + k] = l.d[k + 2]; out[o + k + 1] = l.d[k + 1]; out[o + k + 2] = l.d[k]; out[o + k + 3] = l.d[k + 3]; }
+    o += l.d.length;
+  });
+  return new Blob([out], { type: 'application/octet-stream' });
+}
+
+function setBase(tex, w, h, name, meta = {}) {
+  if (Math.max(w, h) > MAX_TEX) throw new Error(t('errTexMax', { m: MAX_TEX }));
+  state.base?.tex.dispose();
+  tex.flipY = false; tex.colorSpace = THREE.NoColorSpace; tex.anisotropy = MAX_ANISO;
+  tex.minFilter = THREE.LinearMipmapLinearFilter; tex.magFilter = THREE.LinearFilter; tex.generateMipmaps = true; tex.needsUpdate = true;
+  state.base = { tex, w, h, name, ...meta };
+  previewMat.uniforms.tBase.value = tex; previewMat.uniforms.uHasBase.value = 1;
+  refreshTexInfo();
+  requestBake();
+}
+async function loadBaseFromBlob(blob, name) {
+  if (/\.tex$/i.test(name)) {
+    const t = decodeTex(await blob.arrayBuffer(), name);
+    setBase(new THREE.DataTexture(t.rgba, t.w, t.h, THREE.RGBAFormat, THREE.UnsignedByteType), t.w, t.h, name, { attr: t.attr, label: t.label });
+    return;
+  }
+  const bmp = await createImageBitmap(blob, { premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+  setBase(new THREE.Texture(bmp), bmp.width, bmp.height, name);
+}
+$('clearTex').addEventListener('click', () => {
+  state.base?.tex.dispose(); state.base = null;
+  previewMat.uniforms.uHasBase.value = 0; previewMat.uniforms.tBase.value = null;
+  refreshTexInfo(); requestBake();
+});
+$('outSize').addEventListener('change', (e) => { state.outSize = +e.target.value; refreshTexInfo(); requestBake(); });
+function refreshTexInfo() {
+  const b = state.base;
+  $('texInfo').textContent = b ? `${b.name}  ${b.w}×${b.h}${b.label ? `  (${b.label})` : ''}` : t('noTex', { s: state.outSize });
+}
+langHooks.push(() => { if (state.base || state.meshes.length) refreshTexInfo(); });
+
+/* ============================== tattoo layers ============================== */
+function readAsDataURL(blob) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); }); }
+function loadImage(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error(t('errImage'))); i.src = src; }); }
+
+async function makeLayer(dataURL, name, params = {}) {
+  const img = await loadImage(dataURL);
+  const lim = Math.min(4096, MAX_TEX), s = Math.min(1, lim / Math.max(img.width, img.height));
+  const cv = document.createElement('canvas');
+  cv.width = Math.max(1, Math.round(img.width * s)); cv.height = Math.max(1, Math.round(img.height * s));
+  cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.NoColorSpace; tex.premultiplyAlpha = true; tex.anisotropy = MAX_ANISO;
+  tex.minFilter = THREE.LinearMipmapLinearFilter; tex.generateMipmaps = true;
+  const L = {
+    id: state.nextId++, name, dataURL, tex, aspect: cv.height / cv.width,
+    pos: null, nrm: new V3(0, 0, 1), width: state.height * 0.15, rot: 0, opacity: 1,
+    depthRatio: 0.5, cut: 80, flipX: false, lockDir: false, tintOn: false, tint: '#1d1717', visible: true,
+  };
+  Object.assign(L, params);
+  if (params.pos) L.pos = new V3().fromArray(params.pos);
+  if (params.nrm) L.nrm = new V3().fromArray(params.nrm);
+  return L;
+}
+
+async function addTattooFiles(files, dropEvent) {
+  if (!state.meshes.length) { toast(t('needModel'), true); return; }
+  for (const f of files) {
+    try {
+      const L = await makeLayer(await readAsDataURL(f), f.name.replace(/\.[^.]+$/, ''));
+      const hit = (dropEvent && pickAt(dropEvent.clientX, dropEvent.clientY)) || pickAt(...viewCenter());
+      if (hit) placeLayer(L, hit, true);
+      else { L.pos = state.center.clone(); L.nrm = camera.position.clone().sub(controls.target).normalize(); }
+      state.layers.push(L); state.sel = L;
+    } catch (err) { toast(`${f.name}: ${err.message}`, true); }
+  }
+  renderLayers(); requestBake();
+}
+
+const selLayer = () => state.sel;
+function renderLayers() {
+  const el = $('layerList'); el.innerHTML = '';
+  if (!state.layers.length) { el.innerHTML = `<div class="empty">${t('noLayers')}</div>`; }
+  // top of the list = drawn last (on top)
+  [...state.layers].reverse().forEach((L) => {
+    const row = document.createElement('div');
+    row.className = 'layer' + (L === state.sel ? ' sel' : '');
+    row.innerHTML = `<img alt="" src="${L.dataURL}"><div class="nm">${escapeHTML(L.name)}<small>${(L.width / state.height * 100).toFixed(1)}% · ${L.rot.toFixed(0)}°</small></div>
+      <div class="acts">
+        <button class="icon" data-a="vis" title="${t('vis')}">${L.visible ? '●' : '○'}</button>
+        <button class="icon" data-a="up" title="${t('up')}">↑</button>
+        <button class="icon" data-a="down" title="${t('down')}">↓</button>
+        <button class="icon" data-a="del" title="${t('del')}">✕</button></div>`;
+    row.addEventListener('click', (e) => {
+      const a = e.target.closest('[data-a]')?.dataset.a, i = state.layers.indexOf(L);
+      if (a === 'vis') L.visible = !L.visible;
+      else if (a === 'up' && i < state.layers.length - 1) [state.layers[i], state.layers[i + 1]] = [state.layers[i + 1], state.layers[i]];
+      else if (a === 'down' && i > 0) [state.layers[i], state.layers[i - 1]] = [state.layers[i - 1], state.layers[i]];
+      else if (a === 'del') { removeLayer(L); return; }
+      else state.sel = L;
+      renderLayers(); requestBake();
+    });
+    el.appendChild(row);
+  });
+  renderProps(); updateGizmo();
+}
+function removeLayer(L) {
+  L.tex.dispose(); state.layers = state.layers.filter((x) => x !== L);
+  if (state.sel === L) state.sel = state.layers[state.layers.length - 1] || null;
+  renderLayers(); requestBake();
+}
+
+// paired slider + number inputs
+const PROPS = [
+  ['pSize', (L) => L.width / state.height * 100, (L, v) => { L.width = Math.max(v, 0.05) / 100 * state.height; }],
+  ['pRot', (L) => L.rot, (L, v) => { L.rot = v; }],
+  ['pOp', (L) => L.opacity * 100, (L, v) => { L.opacity = THREE.MathUtils.clamp(v / 100, 0, 1); }],
+  ['pDepth', (L) => L.depthRatio * 100, (L, v) => { L.depthRatio = Math.max(v, 1) / 100; }],
+  ['pCut', (L) => L.cut, (L, v) => { L.cut = THREE.MathUtils.clamp(v, 5, 89); }],
+];
+for (const [id, , set] of PROPS) {
+  for (const el of [$(id), $(id + 'N')]) el.addEventListener('input', (e) => {
+    const L = selLayer(); const v = parseFloat(e.target.value); if (!L || !isFinite(v)) return;
+    set(L, v); syncProps(e.target); requestBake(); updateGizmo(); refreshLayerCaption();
+  });
+}
+function syncProps(except) {
+  const L = selLayer(); if (!L) return;
+  for (const [id, get] of PROPS) {
+    const v = +get(L).toFixed(1);
+    if ($(id) !== except) $(id).value = v;
+    if ($(id + 'N') !== except) $(id + 'N').value = v;
+  }
+  $('pFlip').checked = L.flipX; $('pLock').checked = L.lockDir; $('pTintOn').checked = L.tintOn; $('pTint').value = L.tint;
+}
+function refreshLayerCaption() {
+  const L = selLayer(); const row = $('layerList').querySelector('.layer.sel small');
+  if (L && row) row.textContent = `${(L.width / state.height * 100).toFixed(1)}% · ${L.rot.toFixed(0)}°`;
+}
+function renderProps() { $('props').hidden = !selLayer(); syncProps(); }
+$('pFlip').addEventListener('change', (e) => { const L = selLayer(); if (L) { L.flipX = e.target.checked; requestBake(); } });
+$('pLock').addEventListener('change', (e) => { const L = selLayer(); if (L) L.lockDir = e.target.checked; });
+$('pTintOn').addEventListener('change', (e) => { const L = selLayer(); if (L) { L.tintOn = e.target.checked; requestBake(); } });
+$('pTint').addEventListener('input', (e) => { const L = selLayer(); if (L) { L.tint = e.target.value; if (!L.tintOn) { L.tintOn = true; $('pTintOn').checked = true; } requestBake(); } });
+$('pFromView').addEventListener('click', () => {
+  const L = selLayer(); if (!L) return;
+  L.nrm = camera.position.clone().sub(controls.target).normalize(); L.lockDir = true;
+  const hit = pickAt(...viewCenter()); if (hit) L.pos = hit.point.clone();
+  syncProps(); requestBake(); updateGizmo(); toast(t('fromView'));
+});
+$('pDup').addEventListener('click', async () => {
+  const L = selLayer(); if (!L) return;
+  const c = await makeLayer(L.dataURL, t('copy', { n: L.name }), { ...layerParams(L) });
+  c.pos.addScaledVector(layerFrame(L).x, L.width * 0.3);
+  state.layers.push(c); state.sel = c; renderLayers(); requestBake();
+});
+$('pMirror').addEventListener('click', async () => {
+  const L = selLayer(); if (!L) return;
+  const p = layerParams(L);
+  p.pos[0] = -p.pos[0]; p.nrm[0] = -p.nrm[0]; p.flipX = !L.flipX; p.rot = -L.rot;
+  const c = await makeLayer(L.dataURL, t('mirror', { n: L.name }), p);
+  state.layers.push(c); state.sel = c; renderLayers(); requestBake();
+});
+function layerParams(L) {
+  return { pos: L.pos ? L.pos.toArray() : null, nrm: L.nrm.toArray(), width: L.width, rot: L.rot, opacity: L.opacity, depthRatio: L.depthRatio,
+    cut: L.cut, flipX: L.flipX, lockDir: L.lockDir, tintOn: L.tintOn, tint: L.tint, visible: L.visible };
+}
+
+function updateGizmo() {
+  const L = selLayer();
+  gizmo.visible = !!(L && L.pos && L.visible);
+  if (gizmo.visible) {
+    const f = layerFrame(L);
+    gizmo.matrix.makeBasis(f.x, f.y, f.z).scale(new V3(f.w, f.h, f.depth * 2)).setPosition(L.pos);
+  }
+  renderDirty = true;
+}
+
+/* ============================== picking / placement ============================== */
+const raycaster = new THREE.Raycaster();
+function viewCenter() { const r = canvas.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }
+function pickAt(cx, cy) {
+  const r = canvas.getBoundingClientRect();
+  if (cx < r.left || cx > r.right || cy < r.top || cy > r.bottom) return null;
+  raycaster.setFromCamera(new THREE.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1), camera);
+  const objs = state.meshes.filter((m) => m.enabled).map((m) => m.work);
+  return raycaster.intersectObjects(objs, false)[0] || null;
+}
+/** surface direction around the hit, averaged so small bumps (like the navel) don't tilt the tattoo */
+function smoothNormal(hit, radius) {
+  const p = hit.point, r2 = radius * radius, fn = hit.face.normal.clone();
+  const toCam = camera.position.clone().sub(p); if (fn.dot(toCam) < 0) fn.negate();
+  let sx = 0, sy = 0, sz = 0;
+  for (const m of state.meshes) {
+    if (!m.enabled) continue;
+    const P = m.P, N = m.N;
+    for (let i = 0; i < P.length; i += 3) {
+      const dx = P[i] - p.x, dy = P[i + 1] - p.y, dz = P[i + 2] - p.z, d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 > r2) continue;
+      let nx = N[i], ny = N[i + 1], nz = N[i + 2];
+      if (nx * fn.x + ny * fn.y + nz * fn.z < 0) continue;
+      const w = 1 - Math.sqrt(d2) / radius; sx += nx * w; sy += ny * w; sz += nz * w;
+    }
+  }
+  const v = new V3(sx, sy, sz);
+  return v.lengthSq() > 1e-12 ? v.normalize() : fn;
+}
+function placeLayer(L, hit, force) {
+  L.pos = hit.point.clone();
+  if (force || !L.lockDir) L.nrm = smoothNormal(hit, Math.max(L.width * 0.3, state.height * 0.01));
+  updateGizmo(); requestBake();
+}
+
+let dragging = false;
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0 || e.altKey || !state.placeMode || !selLayer()) return;
+  const hit = pickAt(e.clientX, e.clientY); if (!hit) return;
+  e.stopImmediatePropagation(); e.preventDefault();
+  dragging = true; canvas.setPointerCapture(e.pointerId);
+  placeLayer(selLayer(), hit);
+});
+let moveQueued = null;
+canvas.addEventListener('pointermove', (e) => {
+  if (dragging) { moveQueued = [e.clientX, e.clientY]; return; }
+  if (e.buttons === 0 && state.placeMode && selLayer()) moveQueued = ['hover', e.clientX, e.clientY];
+});
+const endDrag = (e) => { if (dragging) { dragging = false; try { canvas.releasePointerCapture(e.pointerId); } catch {} } };
+canvas.addEventListener('pointerup', endDrag); canvas.addEventListener('pointercancel', endDrag);
+canvas.addEventListener('wheel', (e) => {
+  const L = selLayer(); if (!L || !(e.shiftKey || e.ctrlKey)) return;
+  e.stopImmediatePropagation(); e.preventDefault();
+  const d = Math.sign(e.deltaY || e.deltaX);
+  if (e.shiftKey) L.width *= d > 0 ? 1 / 1.05 : 1.05; else L.rot = ((L.rot - d * 3 + 540) % 360) - 180;
+  syncProps(); refreshLayerCaption(); updateGizmo(); requestBake();
+}, { passive: false });
+
+const controls = new OrbitControls(camera, canvas);
+controls.addEventListener('change', () => { renderDirty = true; });
+
+function setPlaceMode(on) { state.placeMode = on; $('placeMode').classList.toggle('on', on); canvas.style.cursor = ''; }
+$('placeMode').addEventListener('click', () => setPlaceMode(!state.placeMode));
+window.addEventListener('keydown', (e) => {
+  if (e.target.closest?.('input, select, textarea')) return;
+  if (e.key === 'q' || e.key === 'Q') setPlaceMode(!state.placeMode);
+  if (e.key === 'Delete' && selLayer()) removeLayer(selLayer());
+});
+
+/* ============================== export ============================== */
+const CRC_TABLE = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(b, s, e) { let c = 0xFFFFFFFF; for (let i = s; i < e; i++) c = CRC_TABLE[(c ^ b[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+/** straight-alpha RGBA PNG writer (canvas.toBlob would premultiply and alter low-alpha pixels) */
+async function encodePNG(w, h, rgba) {
+  const stride = w * 4, raw = new Uint8Array((stride + 1) * h);
+  for (let y = 0; y < h; y++) {
+    const ro = y * (stride + 1), so = y * stride;
+    raw[ro] = 1; // Sub filter
+    for (let i = 0; i < 4; i++) raw[ro + 1 + i] = rgba[so + i];
+    for (let i = 4; i < stride; i++) raw[ro + 1 + i] = (rgba[so + i] - rgba[so + i - 4]) & 0xFF;
+  }
+  const z = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream('deflate'))).arrayBuffer());
+  const chunk = (type, data) => {
+    const b = new Uint8Array(12 + data.length), dv = new DataView(b.buffer);
+    dv.setUint32(0, data.length); for (let i = 0; i < 4; i++) b[4 + i] = type.charCodeAt(i);
+    b.set(data, 8); dv.setUint32(8 + data.length, crc32(b, 4, 8 + data.length)); return b;
+  };
+  const ihdr = new Uint8Array(13), dv = new DataView(ihdr.buffer);
+  dv.setUint32(0, w); dv.setUint32(4, h); ihdr[8] = 8; ihdr[9] = 6;
+  return new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', z), chunk('IEND', new Uint8Array(0))], { type: 'image/png' });
+}
+function download(blob, name) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+/** Full-resolution bake → RGBA8 pixels, row 0 = top of the image */
+function renderExportPixels(tattooOnly) {
+  const [w, h] = exportSize();
+  const A = halfRT(w, h), B = halfRT(w, h), out = byteRT(w, h, false);
+  const src = bakeInto(A, B, state.padding);
+  const cu = compMat.uniforms;
+  cu.tTat.value = src.texture; cu.tBase.value = state.base?.tex || null; cu.uHasBase.value = state.base ? 1 : 0;
+  cu.uMode.value = state.blend; cu.uTatOnly.value = tattooOnly ? 1 : 0; cu.uFetch.value = 1;
+  fsPass(compMat, out);
+  const px = new Uint8Array(w * h * 4);
+  renderer.readRenderTargetPixels(out, 0, 0, w, h, px);
+  renderer.setRenderTarget(null);
+  A.dispose(); B.dispose(); out.dispose();
+  return { w, h, px };
+}
+/** kind: 'tex' | 'png' | 'tattoo' */
+async function doExport(kind) {
+  const tattooOnly = kind === 'tattoo';
+  if (!state.meshes.length) { toast(t('noModel'), true); return; }
+  if (!tattooOnly && !state.base) { toast(t('needBase'), true); return; }
+  setBusy(true);
+  await new Promise((r) => setTimeout(r, 30));
+  try {
+    const t0 = performance.now();
+    const { w, h, px } = renderExportPixels(tattooOnly);
+    const stem = (state.base?.name || 'skin').replace(/\.[^.]+$/, '');
+    let blob, name;
+    if (kind === 'tex') { blob = encodeTex(w, h, px, state.base.attr); name = `${stem}_tattoo.tex`; }
+    else { blob = await encodePNG(w, h, px); name = tattooOnly ? `${stem}_tattoo_only.png` : `${stem}_tattoo.png`; }
+    download(blob, name);
+    $('expInfo').textContent = `${name}  ${w}×${h}  ${(blob.size / 1048576).toFixed(1)}MB  (${t('sec', { t: ((performance.now() - t0) / 1000).toFixed(1) })})`
+      + (kind === 'tex' && state.base.replacePath ? `\n${t('replaceBackup', { p: state.base.replacePath })}` : '');
+    $('expInfo').style.whiteSpace = 'pre-line';
+    toast(t('saved', { n: name }));
+  } catch (err) { console.error(err); toast(t('errExport', { e: err.message }), true); }
+  finally { setBusy(false); }
+}
+$('expTex').addEventListener('click', () => doExport('tex'));
+$('expComp').addEventListener('click', () => doExport('png'));
+$('expTat').addEventListener('click', () => doExport('tattoo'));
+$('blend').addEventListener('change', (e) => { state.blend = +e.target.value; previewMat.uniforms.uMode.value = state.blend; uvDirty = true; renderDirty = true; });
+$('pad').addEventListener('input', (e) => { const v = parseInt(e.target.value, 10); if (isFinite(v)) { state.padding = THREE.MathUtils.clamp(v, 0, 64); requestBake(); } });
+
+/* ============================== project save / load ============================== */
+$('projSave').addEventListener('click', () => {
+  const data = { app: 'SeamInk', version: 1, model: state.modelName, flipV: state.flipV, chan: state.chan, blend: state.blend, padding: state.padding,
+    layers: state.layers.map((L) => ({ name: L.name, image: L.dataURL, aspect: L.aspect, ...layerParams(L) })) };
+  download(new Blob([JSON.stringify(data)], { type: 'application/json' }), 'seamink_layout.json');
+});
+$('projFile').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try {
+    const d = JSON.parse(await f.text());
+    if (d.app !== 'SeamInk') throw new Error(t('errLayoutFile'));
+    for (const L of state.layers) L.tex.dispose();
+    state.layers = [];
+    for (const p of d.layers) { const { name, image, aspect, ...rest } = p; state.layers.push(await makeLayer(image, name, rest)); }
+    state.sel = state.layers[state.layers.length - 1] || null;
+    state.blend = d.blend ?? 0; $('blend').value = state.blend; previewMat.uniforms.uMode.value = state.blend;
+    state.padding = d.padding ?? 8; $('pad').value = state.padding;
+    if (state.meshes.length && d.flipV !== undefined && d.flipV !== state.flipV) { state.flipV = d.flipV; $('uvFlip').checked = d.flipV; applyUV(); }
+    renderLayers(); requestBake();
+    toast(t('layoutLoaded', { m: d.model || t('noModelName') }));
+  } catch (err) { toast(t('errLayout', { e: err.message }), true); }
+});
+
+/* ============================== files / drag & drop ============================== */
+const isModel = (n) => /\.(mdl|glb|gltf|fbx|obj)$/i.test(n);
+const isImage = (f) => /^image\//.test(f.type) || /\.(png|jpe?g|webp|bmp)$/i.test(f.name);
+$('modelFile').addEventListener('change', (e) => { const fs = [...e.target.files]; e.target.value = ''; loadModelFiles(fs); });
+$('texFile').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) loadBaseSafe(f); });
+$('tatFile').addEventListener('change', (e) => { const fs = [...e.target.files]; e.target.value = ''; addTattooFiles(fs); });
+async function loadBaseSafe(f) { try { await loadBaseFromBlob(f, f.name); toast(t('texSet', { n: f.name })); } catch (err) { toast(t('errTex', { e: err.message }), true); } }
+
+for (const id of ['modelDrop', 'texDrop', 'tatDrop']) {
+  const el = $(id);
+  el.addEventListener('dragover', (e) => { e.preventDefault(); el.classList.add('over'); });
+  el.addEventListener('dragleave', () => el.classList.remove('over'));
+}
+window.addEventListener('dragover', (e) => e.preventDefault());
+window.addEventListener('drop', (e) => {
+  e.preventDefault();
+  document.querySelectorAll('.drop.over').forEach((x) => x.classList.remove('over'));
+  const files = [...(e.dataTransfer?.files || [])]; if (!files.length) return;
+  const zone = e.target.closest?.('.drop')?.id;
+  if (files.some((f) => isModel(f.name))) { loadModelFiles(files); return; }
+  const tex = files.find((f) => /\.tex$/i.test(f.name)); if (tex) { loadBaseSafe(tex); return; }
+  const imgs = files.filter(isImage); if (!imgs.length) return;
+  if (zone === 'texDrop') loadBaseSafe(imgs[0]);
+  else addTattooFiles(imgs, viewEl.contains(e.target) ? e : null);
+});
+
+/* ============================== built-in sample (4-piece UV torso) ============================== */
+function buildSample() {
+  const H = 0.75, Y0 = 0.85;
+  const surf = (th, h) => {
+    const w = 0.165 - 0.038 * Math.exp(-(((h - 0.42) / 0.16) ** 2)) + 0.014 * Math.exp(-(((h - 0.78) / 0.12) ** 2));
+    const d = 0.105 - 0.015 * Math.exp(-(((h - 0.42) / 0.18) ** 2)) + 0.028 * Math.exp(-(((h - 0.74) / 0.08) ** 2)) * Math.max(0, Math.cos(th)) ** 2;
+    let x = w * Math.sin(th), z = d * Math.cos(th);
+    const dent = 0.007 * Math.exp(-(th * th) / (2 * 0.05 * 0.05) - ((h - 0.36) ** 2) / (2 * 0.016 * 0.016));
+    const len = Math.hypot(x, z); x -= (x / len) * dent; z -= (z / len) * dent;
+    return new V3(x, Y0 + h * H, z);
+  };
+  const ST = 48, SY = 96, M = 0.03;
+  // [theta range, UV rect (u0,v0,u1,v1) in image space, label]
+  const islands = [
+    [-Math.PI / 2, 0, [M, M, 0.5 - M / 2, 0.5 - M / 2], t('sFR')],
+    [0, Math.PI / 2, [0.5 + M / 2, 0.5 + M / 2, 1 - M, 1 - M], t('sFL')],
+    [Math.PI / 2, Math.PI, [0.5 + M / 2, M, 1 - M, 0.5 - M / 2], t('sBL')],
+    [-Math.PI, -Math.PI / 2, [M, 0.5 + M / 2, 0.5 - M / 2, 1 - M], t('sBR')],
+  ];
+  const P = [], N = [], UV = [], I = [];
+  const e = 1e-4;
+  for (const [t0, t1, [u0, v0, u1, v1]] of islands) {
+    const base = P.length / 3;
+    for (let j = 0; j <= SY; j++) for (let i = 0; i <= ST; i++) {
+      const th = t0 + (t1 - t0) * (i / ST), h = j / SY;
+      const p = surf(th, h);
+      const dt = surf(th + e, h).sub(surf(th - e, h)), dh = surf(th, Math.min(1, h + e)).sub(surf(th, Math.max(0, h - e)));
+      const n = new V3().crossVectors(dt, dh).normalize();
+      if (n.x * p.x + n.z * p.z < 0) n.negate();
+      P.push(p.x, p.y, p.z); N.push(n.x, n.y, n.z);
+      UV.push(u0 + (u1 - u0) * (i / ST), v1 - (v1 - v0) * h);
+    }
+    for (let j = 0; j < SY; j++) for (let i = 0; i < ST; i++) {
+      const a = base + j * (ST + 1) + i, b = a + 1, c = a + ST + 1, d = c + 1;
+      I.push(a, b, d, a, d, c);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(UV.length), 2));
+  geo.setIndex(new THREE.BufferAttribute(new Uint32Array(I), 1));
+  const rec = { name: t('sampleBody'), matName: '', geo, raw: { uv: new Float32Array(UV) }, P: geo.attributes.position.array, N: geo.attributes.normal.array, enabled: true };
+
+  // sample skin texture showing the four islands
+  const S = 2048, cv = document.createElement('canvas'); cv.width = cv.height = S;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#4a3b36'; g.fillRect(0, 0, S, S);
+  for (const [, , [u0, v0, u1, v1], label] of islands) {
+    const x = u0 * S, y = v0 * S, w = (u1 - u0) * S, h = (v1 - v0) * S;
+    const gr = g.createLinearGradient(x, y, x, y + h); gr.addColorStop(0, '#edc7ab'); gr.addColorStop(1, '#dfb293');
+    g.fillStyle = gr; g.fillRect(x, y, w, h);
+    g.strokeStyle = 'rgba(120,80,60,0.18)'; g.lineWidth = 2;
+    for (let k = 1; k < 8; k++) { g.beginPath(); g.moveTo(x + (w * k) / 8, y); g.lineTo(x + (w * k) / 8, y + h); g.moveTo(x, y + (h * k) / 8); g.lineTo(x + w, y + (h * k) / 8); g.stroke(); }
+    g.fillStyle = 'rgba(110,70,55,0.35)'; g.font = '700 64px "Zen Kaku Gothic New", "Yu Gothic", sans-serif'; g.fillText(label, x + 28, y + 84);
+  }
+  // sample tattoo: an ink sun emblem
+  const T = 1024, tc = document.createElement('canvas'); tc.width = tc.height = T;
+  const t = tc.getContext('2d'); t.translate(T / 2, T / 2); t.fillStyle = t.strokeStyle = '#1d1717';
+  t.lineWidth = 22; t.beginPath(); t.arc(0, 0, 150, 0, Math.PI * 2); t.stroke();
+  t.lineWidth = 10; t.beginPath(); t.arc(0, 0, 105, 0, Math.PI * 2); t.stroke();
+  for (let k = 0; k < 16; k++) {
+    const a = (k / 16) * Math.PI * 2, long = k % 2 === 0, r0 = 185, r1 = long ? 470 : 330, hw = long ? 0.11 : 0.08;
+    t.beginPath(); t.moveTo(Math.cos(a - hw) * r0, Math.sin(a - hw) * r0); t.lineTo(Math.cos(a) * r1, Math.sin(a) * r1); t.lineTo(Math.cos(a + hw) * r0, Math.sin(a + hw) * r0); t.closePath(); t.fill();
+  }
+  for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2 + Math.PI / 8; t.beginPath(); t.arc(Math.cos(a) * 60, Math.sin(a) * 60, 14, 0, Math.PI * 2); t.fill(); }
+  return { rec, skin: cv, tattoo: tc.toDataURL('image/png'), navel: { th: 0, h: 0.36, surf } };
+}
+
+async function loadSample() {
+  const s = buildSample();
+  addMeshRecords([s.rec], t('sampleModel'), false); state.modelNameKey = 'sampleModel'; updateModelInfo();
+  const blob = await new Promise((r) => s.skin.toBlob(r, 'image/png'));
+  await loadBaseFromBlob(blob, 'sample_skin.png');
+  for (const L of state.layers) L.tex.dispose();
+  const p = s.navel.surf(0, 0.36);
+  const L = await makeLayer(s.tattoo, t('sampleTattoo'), { pos: p.toArray(), nrm: [0, 0, 1], width: state.height * 0.36, depthRatio: 0.6 });
+  L.sample = true;
+  state.layers = [L]; state.sel = L;
+  renderLayers(); requestBake();
+}
+$('loadSample').addEventListener('click', () => loadSample());
+
+/* ============================== presets from the launcher (SeamInk起動.bat) ============================== */
+const presets = { data: null };
+const presetKey = (e) => `${e.mod}|${e.file.toLowerCase()}`;
+const presetURL = (e) => `/mod/${e.mod}/${e.file.split('/').map(encodeURIComponent).join('/')}`;
+async function fetchPresetFile(e) {
+  const r = await fetch(presetURL(e)); if (!r.ok) throw new Error(`${t('errRead', { f: e.file })} (${r.status})`);
+  return new File([await r.arrayBuffer()], e.file.split('/').pop());
+}
+function fillPresetSelect(sel, kind) {
+  const d = presets.data, act = d.active[kind];
+  sel.innerHTML = '';
+  for (const m of d.mods) {
+    const items = d[kind].filter((e) => e.mod === m.id); if (!items.length) continue;
+    const og = document.createElement('optgroup'); og.label = m.name + (m.enabled ? '' : t('disabled'));
+    for (const e of items) {
+      const o = document.createElement('option'); o.value = presetKey(e);
+      const name = kind === 'skin' ? e.label : e.label.replace(/^[^:]*:\s*/, '');
+      const races = e.races ? `［${[...new Set(e.races)].join('・')}］` : '';
+      const using = act && presetKey(act) === presetKey(e) ? t('using') : '';
+      o.textContent = `${using}${name} ${races}`.trim(); o.title = e.file;
+      og.appendChild(o);
+    }
+    sel.appendChild(og);
+  }
+  if (act) sel.value = presetKey(act);
+}
+const presetPick = (kind) => presets.data[kind].find((e) => presetKey(e) === $(kind === 'top' ? 'psTop' : kind === 'legs' ? 'psLegs' : 'psSkin').value);
+async function loadPresetModel() {
+  const parts = [presetPick('top'), presetPick('legs')].filter(Boolean); if (!parts.length) return;
+  setBusy(true);
+  try { await loadModelFiles(await Promise.all(parts.map(fetchPresetFile))); }
+  catch (err) { toast(err.message, true); } finally { setBusy(false); }
+}
+async function loadPresetSkin() {
+  const e = presetPick('skin'); if (!e) return;
+  setBusy(true);
+  try {
+    const f = await fetchPresetFile(e);
+    await loadBaseFromBlob(f, f.name);
+    const mod = presets.data.mods.find((m) => m.id === e.mod);
+    state.base.replacePath = `${mod.path}\\${e.file.replace(/\//g, '\\')}`;
+    $('psInfo').textContent = t('replace', { p: state.base.replacePath });
+  } catch (err) { toast(err.message, true); } finally { setBusy(false); }
+}
+$('psTop').addEventListener('change', loadPresetModel);
+$('psLegs').addEventListener('change', loadPresetModel);
+$('psSkin').addEventListener('change', loadPresetSkin);
+$('psActive').addEventListener('click', async () => {
+  for (const [kind, id] of [['top', 'psTop'], ['legs', 'psLegs'], ['skin', 'psSkin']]) if (presets.data.active[kind]) $(id).value = presetKey(presets.data.active[kind]);
+  await loadPresetModel(); await loadPresetSkin();
+});
+async function loadPresets() {
+  if (!/^https?:$/.test(location.protocol)) return false;
+  try {
+    const r = await fetch('/api/presets', { cache: 'no-store' }); if (!r.ok) return false;
+    presets.data = await r.json();
+  } catch { return false; }
+  const d = presets.data; if (!d.top.length && !d.legs.length && !d.skin.length) return false;
+  fillPresetSelect($('psTop'), 'top'); fillPresetSelect($('psLegs'), 'legs'); fillPresetSelect($('psSkin'), 'skin');
+  $('presetSec').hidden = false;
+  await loadPresetModel(); await loadPresetSkin();
+  if (d.collection) toast(t('presetLoaded', { c: d.collection }));
+  return true;
+}
+
+/* ============================== misc ui ============================== */
+function escapeHTML(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+let toastTimer;
+function toast(msg, err) { const t = $('toast'); t.textContent = msg; t.classList.toggle('err', !!err); t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), err ? 5000 : 2600); }
+function setBusy(b) { $('busy').hidden = !b; }
+
+function resize() {
+  const r = viewEl.getBoundingClientRect();
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / Math.max(r.height, 1); camera.updateProjectionMatrix(); renderDirty = true;
+}
+new ResizeObserver(resize).observe(viewEl);
+
+/* ============================== main loop ============================== */
+let lastUV = 0;
+function tick(now) {
+  requestAnimationFrame(tick);
+  if (moveQueued) {
+    const q = moveQueued; moveQueued = null;
+    if (q[0] === 'hover') canvas.style.cursor = pickAt(q[1], q[2]) ? 'crosshair' : '';
+    else if (dragging) { const hit = pickAt(q[0], q[1]); if (hit) placeLayer(selLayer(), hit); }
+  }
+  if (bakeDirty && state.meshes.length) { bakeDirty = false; bakePreview(); }
+  if (uvDirty && pv.disp && now - lastUV > 90) { uvDirty = false; lastUV = now; drawUV(); }
+  if (renderDirty) {
+    renderDirty = false;
+    previewMat.uniforms.uCam.value.copy(camera.position);
+    renderer.setRenderTarget(null); renderer.render(scene, camera);
+  }
+}
+renderLayers();
+$('texInfo').textContent = '—';
+/* ============================== Penumbra auto version (SeamInk_Auto launcher) ============================== */
+// own: the race's own code, skin: the code whose body skin it uses, body: body id (Xaela/Raen differ), base: shared body model
+const RACES = [
+  ['mid', 'ミッドランダー', { own: 'c0201', skin: 'c0201' }, { own: 'c0101', skin: 'c0101' }],
+  ['high', 'ハイランダー', { own: 'c0401', skin: 'c0401' }, { own: 'c0301', skin: 'c0301' }],
+  ['elezen', 'エレゼン', { own: 'c0601', skin: 'c0201' }, { own: 'c0501', skin: 'c0101' }],
+  ['miqote', 'ミコッテ', { own: 'c0801', skin: 'c0201' }, { own: 'c0701', skin: 'c0101' }],
+  ['roe', 'ルガディン', { own: 'c1001', skin: 'c0401' }, { own: 'c0901', skin: 'c0301' }],
+  ['lala', 'ララフェル', { own: 'c1201', skin: 'c1101', base: 'c1101' }, { own: 'c1101', skin: 'c1101', base: 'c1101' }],
+  ['raen', 'アウラ・レン', { own: 'c1401', skin: 'c1401' }, { own: 'c1301', skin: 'c1301' }],
+  ['xaela', 'アウラ・ゼラ', { own: 'c1401', skin: 'c1401', body: '0101' }, { own: 'c1301', skin: 'c1301', body: '0101' }],
+  ['hroth', 'ロスガル', { own: 'c1601', skin: 'c1601' }, { own: 'c1501', skin: 'c1501' }],
+  ['viera', 'ヴィエラ', { own: 'c1801', skin: 'c1801' }, { own: 'c1701', skin: 'c1701' }],
+];
+const store = { get: (k) => { try { return localStorage.getItem('seamink.' + k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem('seamink.' + k, v); } catch {} } };
+const uniq = (a) => [...new Set(a)];
+const SAMPLER_DIFFUSE = 0x115306be;
+/** texture paths of a .mtrl and which one the diffuse sampler uses */
+function parseMtrl(buf) {
+  const dv = new DataView(buf), u8 = new Uint8Array(buf);
+  const dataSetSize = dv.getUint16(6, true), strSize = dv.getUint16(8, true);
+  const nTex = u8[12], nUv = u8[13], nCs = u8[14], addSize = u8[15];
+  const texOffs = []; for (let i = 0; i < nTex; i++) texOffs.push(dv.getUint16(16 + i * 4, true));
+  const strBase = 16 + 4 * (nTex + nUv + nCs);
+  const cstr = (o) => { let e = strBase + o; while (u8[e]) e++; return new TextDecoder().decode(u8.subarray(strBase + o, e)); };
+  const textures = texOffs.map(cstr);
+  let diffuse = -1;
+  try {
+    let o = strBase + strSize + addSize + dataSetSize;
+    const nKey = dv.getUint16(o + 2, true), nConst = dv.getUint16(o + 4, true), nSamp = dv.getUint16(o + 6, true);
+    o += 12 + nKey * 8 + nConst * 8;
+    for (let i = 0; i < nSamp; i++) if (dv.getUint32(o + i * 12, true) === SAMPLER_DIFFUSE) diffuse = u8[o + i * 12 + 8];
+  } catch {}
+  if (!(diffuse >= 0 && diffuse < textures.length)) diffuse = textures.findIndex((t) => /(_base|_d|diffuse)\.tex$/i.test(t));
+  return { textures, diffuse: diffuse >= 0 ? textures[diffuse] : textures[0] };
+}
+const auto = { info: null };
+async function apiResolve(paths) {
+  const q = new URLSearchParams({ collection: $('auCol').value }); paths.forEach((p) => q.append('path', p));
+  const r = await fetch('/api/resolve?' + q); const j = await r.json();
+  if (!r.ok) throw new Error(j.code ? t('err_' + j.code) : (j.error || t('errPenumbra')));
+  return j.results;
+}
+async function fetchResolved(res) {
+  const r = await fetch(res.url); if (!r.ok) throw new Error(t('errRead', { f: res.file }));
+  return new File([await r.arrayBuffer()], res.file.split('/').pop());
+}
+// rows: [label key, resolved file or null, note key, note vars, raw note]
+let lastAutoRows = null, auStatusKey = '';
+function showAuto(rows) {
+  lastAutoRows = rows;
+  $('auResult').innerHTML = rows.map(([k, r, noteKey, vars, raw]) => `<div><b>${t(k)}</b><span${r ? '' : ' class="bad"'}>${r ? `${escapeHTML(r.mod)}${r.option ? ` ／ ${escapeHTML(r.option)}` : ''}<small>${escapeHTML(r.file)}</small>` : escapeHTML(noteKey ? t(noteKey, vars) : (raw || ''))}</span></div>`).join('');
+}
+const setAuStatus = (k) => { auStatusKey = k; $('auStatus').textContent = k ? t(k) : ''; };
+const keyErr = (k, vars) => Object.assign(new Error(t(k, vars)), { key: k, vars });
+async function autoLoad() {
+  const race = RACES.find((r) => r[0] === $('auRace').value) || RACES[0], g = $('auGender').value === 'm' ? race[3] : race[2];
+  store.set('race', race[0]); store.set('gender', $('auGender').value); store.set('collection', $('auCol').value);
+  const base = g.base || ($('auGender').value === 'm' ? 'c0101' : 'c0201'), body = g.body || '0001';
+  const codes = uniq([g.own, g.skin, base]);
+  const rows = []; setBusy(true); setAuStatus('');
+  try {
+    // 1. body models (race-specific first, then the shared body)
+    const mp = (c, part) => `chara/equipment/e0000/model/${c}e0000_${part}.mdl`;
+    const res = await apiResolve(codes.flatMap((c) => [mp(c, 'top'), mp(c, 'dwn')]));
+    const top = res.find((r) => r.found && r.gamePath.endsWith('_top.mdl')), dwn = res.find((r) => r.found && r.gamePath.endsWith('_dwn.mdl'));
+    rows.push(['rUpper', top, 'noMod'], ['rLower', dwn, 'noMod']);
+    if (!top && !dwn) throw keyErr('errNoBodyMod');
+    await loadModelFiles(await Promise.all([top, dwn].filter(Boolean).map(fetchResolved)));
+    for (const L of state.layers.filter((l) => l.sample)) removeLayer(L);   // the demo emblem doesn't belong on a real body
+    // 2. the skin material the body meshes use, for this race
+    const skinMesh = state.meshes.find((m) => m.enabled && m.matName);
+    if (!skinMesh) throw keyErr('errNoMatName');
+    const name = skinMesh.matName.split('/').pop();
+    const mats = uniq([[g.skin, body], [g.skin, '0001'], [base, '0001']].map(([c, b]) => {
+      const n = name.replace(/c\d{4}b\d{4}/, `${c}b${b}`);
+      return `chara/human/${c}/obj/body/b${b}/material/v0001/${n}`;
+    }));
+    const mres = (await apiResolve(mats)).find((r) => r.found);
+    rows.push(['rMaterial', mres, 'matNotFound', { n: name }]);
+    if (!mres) throw keyErr('errNoMtrl');
+    const mt = parseMtrl(await (await fetchResolved(mres)).arrayBuffer());
+    // 3. the diffuse texture it points to
+    const tres = (await apiResolve([mt.diffuse]))[0];
+    rows.push(['rSkin', tres.found ? tres : null, 'texNotFound', { p: mt.diffuse }]);
+    if (!tres.found) throw keyErr('errNoTex');
+    const f = await fetchResolved(tres);
+    await loadBaseFromBlob(f, f.name);
+    state.base.replacePath = tres.localPath;
+    rows.push(['rReplace', { mod: tres.localPath, file: '' }]);
+    setAuStatus('loadedStatus');
+    toast(t('autoLoaded', { r: t('race_' + race[0]), g: t($('auGender').value === 'm' ? 'male' : 'female') }));
+  } catch (err) { console.error(err); setAuStatus(''); toast(err.message, true); rows.push(['rError', null, err.key || null, err.vars, err.message]); }
+  finally { showAuto(rows); setBusy(false); }
+}
+$('auLoad').addEventListener('click', autoLoad);
+function fillAutoOptions() {
+  const info = auto.info; if (!info) return;
+  const race = $('auRace').value, col = $('auCol').value;
+  $('auRace').innerHTML = RACES.map((r) => `<option value="${r[0]}">${t('race_' + r[0])}</option>`).join('');
+  $('auCol').innerHTML = info.collections.map((c) => `<option value="${escapeHTML(c.id)}">${escapeHTML(c.name)}${c.id === info.default ? t('inUse') : ''}</option>`).join('');
+  if (race) $('auRace').value = race; if (col) $('auCol').value = col;
+}
+langHooks.push(() => { fillAutoOptions(); if (lastAutoRows) showAuto(lastAutoRows); setAuStatus(auStatusKey); });
+langHooks.push(() => {
+  if (!presets.data) return;
+  for (const [id, kind] of [['psTop', 'top'], ['psLegs', 'legs'], ['psSkin', 'skin']]) { const v = $(id).value; fillPresetSelect($(id), kind); $(id).value = v; }
+  if (state.base?.replacePath) $('psInfo').textContent = t('replace', { p: state.base.replacePath });
+});
+langHooks.push(renderLayers, renderMeshList);
+async function loadAuto() {
+  if (!/^https?:$/.test(location.protocol)) return false;
+  let info;
+  try { const r = await fetch('/api/penumbra', { cache: 'no-store' }); if (!r.ok) return false; info = await r.json(); } catch { return false; }
+  $('autoSec').hidden = false;
+  if (!info.ok) { showAuto([['rError', null, info.code ? 'err_' + info.code : null, {}, info.error]]); return true; }
+  auto.info = info;
+  fillAutoOptions();
+  const race = store.get('race'), gender = store.get('gender'), col = store.get('collection');
+  if (gender) $('auGender').value = gender;
+  $('auCol').value = info.collections.some((c) => c.id === col) ? col : info.default;
+  if (race && RACES.some((r) => r[0] === race)) { $('auRace').value = race; await autoLoad(); }
+  else { await loadSample(); setAuStatus('pickRace'); }
+  return true;
+}
+
+applyLang();
+requestAnimationFrame(tick);
+(async () => {
+  if (await loadAuto()) return;
+  if (await loadPresets()) return;
+  $('presetHint').hidden = false; await loadSample();
+})();
+window.seamink = { state, loadModelFiles, loadBaseFromBlob, addTattooFiles, renderExportPixels, encodePNG, encodeTex, decodeTex, pickAt };
+</script>
+</body>
+</html>
